@@ -22,8 +22,16 @@ rclone 에 넘기므로**, 도중에 끊겨도 이미 올라간 조각은 남는
 사용법 (맥북, 한국 IP. 긴 작업은 caffeinate 로 잠들지 않게):
     python scripts/aihub_stream.py --filekey 531138 --dry-run                 # 구조만 (업로드 없음)
     python scripts/aihub_stream.py --filekey 531136 531138                    # 라벨 142MB
-    python scripts/aihub_stream.py --filekey 531136 531138 --buffer-dir /tmp/aihub_buf   # 업로드가 느린 회선
-    caffeinate -i python scripts/aihub_stream.py --filekey 531137             # VS.zip 55GB (빠른 회선에서)
+    python scripts/aihub_stream.py --filekey 531136 531138 --buffer-dir runs/buf        # tar 전체 버퍼
+    caffeinate -i python scripts/aihub_stream.py --filekey 531137 --member-buffer runs/buf  # VS.zip 55GB
+
+버퍼 없이 직접 파이프로 넘기면 실패한다 (2026-09-20 실측). 업로드가 다운로드보다
+느리면 파이프가 막히고 AI Hub 가 연결을 끊는다 — `curl (18) transfer closed`.
+실측 속도차가 원인이다: 다운로드 4.5MB/s vs 업로드 0.4MB/s.
+
+  --buffer-dir     tar 전체를 받은 뒤 업로드. tar 크기만큼 디스크가 필요하다.
+  --member-buffer  조각(.partN) 하나씩 받아 올리고 즉시 삭제. 조각 하나(보통 1GB)만
+                   있으면 되므로 디스크가 작을 때 쓴다. 55GB 를 19GB 디스크로 처리 가능.
 
 API 키는 ~/.aihub_key 에서 읽는다. 출력에 키가 찍히지 않는다.
 """
@@ -88,7 +96,8 @@ def pump(src, size: int, sink) -> int:
 
 
 def stream_filekey(dataset: str, fk: str, dest: str, key: str, dry_run: bool,
-                   buffer_dir: Path | None = None) -> bool:
+                   buffer_dir: Path | None = None,
+                   member_buffer: Path | None = None) -> bool:
     url = BASE.format(dataset=dataset, filekey=fk)
     dest_fk = f"{dest}/{fk}"
     log(f"▶ filekey {fk} → {dest_fk}" + ("  (dry-run: 업로드 없음)" if dry_run else ""))
@@ -128,6 +137,30 @@ def stream_filekey(dataset: str, fk: str, dest: str, key: str, dry_run: bool,
                     log(f"  {leaf}  {ti.size:,} B"); pump(f, ti.size, None)
                 elif rclone_size(remote) == ti.size:
                     log(f"  건너뜀 (Drive 에 있음) {leaf}  {ti.size:,} B"); pump(f, ti.size, None)
+                elif member_buffer is not None:
+                    # 조각 하나를 디스크에 받아 업로드하고 즉시 지운다. 버퍼가 tar 전체가 아니라
+                    # 조각 하나 크기(보통 1GB)만 필요하므로, 디스크가 작아도 55GB 를 처리할 수 있다.
+                    # 파이프가 막혀 서버가 연결을 끊는 문제도 같이 해결된다.
+                    t0 = time.time()
+                    member_buffer.mkdir(parents=True, exist_ok=True)
+                    tmp = member_buffer / f"{leaf}.tmp"
+                    try:
+                        with tmp.open("wb") as out:
+                            pump(f, ti.size, out)
+                        dl = time.time() - t0
+                        t1 = time.time()
+                        r = subprocess.run(["rclone", "copyto", str(tmp), remote],
+                                           capture_output=True, text=True)
+                        got = rclone_size(remote)
+                        if r.returncode == 0 and got == ti.size:
+                            log(f"  완료 {leaf}  {ti.size / 1e6:.0f}MB  "
+                                f"↓{ti.size / max(dl, 1e-6) / 1e6:.1f} ↑{ti.size / max(time.time() - t1, 1e-6) / 1e6:.1f}MB/s")
+                        else:
+                            ok = False
+                            log(f"  실패 {leaf}: rclone={r.returncode} size={got} {r.stderr.strip()[:160]}")
+                            subprocess.run(["rclone", "deletefile", remote], capture_output=True)
+                    finally:
+                        tmp.unlink(missing_ok=True)
                 else:
                     t0 = time.time()
                     rc = subprocess.Popen(["rclone", "rcat", "--size", str(ti.size), remote],
@@ -176,12 +209,18 @@ def main() -> int:
     ap.add_argument("--filekey", nargs="+", required=True)
     ap.add_argument("--dest", default="gdrive:falldata/aihub", help="rclone 원격 경로")
     ap.add_argument("--dry-run", action="store_true", help="스트림을 읽어 구조만 출력하고 업로드하지 않는다")
-    ap.add_argument("--buffer-dir", type=Path, help="tar 를 이 디렉토리에 먼저 받은 뒤 업로드 (업로드가 느린 회선용, 디스크 필요)")
+    ap.add_argument("--buffer-dir", type=Path, help="tar 전체를 이 디렉토리에 먼저 받은 뒤 업로드 (tar 크기만큼 디스크 필요)")
+    ap.add_argument("--member-buffer", type=Path,
+                    help="조각(.partN) 하나씩 디스크에 받아 업로드하고 즉시 삭제 "
+                         "(조각 하나 크기만 필요 — 보통 1GB. 디스크가 작을 때 권장)")
     args = ap.parse_args()
+    if args.buffer_dir and args.member_buffer:
+        sys.exit("--buffer-dir 와 --member-buffer 는 함께 쓸 수 없다")
     key = api_key()
     ok = True
     for fk in args.filekey:
-        ok &= stream_filekey(args.dataset, fk, args.dest, key, args.dry_run, args.buffer_dir)
+        ok &= stream_filekey(args.dataset, fk, args.dest, key, args.dry_run,
+                             args.buffer_dir, args.member_buffer)
     return 0 if ok else 1
 
 
