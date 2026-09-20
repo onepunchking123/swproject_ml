@@ -136,7 +136,7 @@ OmniFall staged 8종의 약점 세 가지를 겨냥한다: 배우가 대부분 �
 | 후보 | 채우는 빈 곳 | 크기 | 입수 경로 | 라이선스 |
 |---|---|---|---|---|
 | **OF-Syn** (OmniFall 합성 12,000편) | 노년(65+) 그룹, **카메라 고도·방위 라벨** | 9.72GB (AV1 tar) | **Drive 확보 완료** (`falldata/omnifall_syn/`, sha256 검증, 137MB/s) | CC-BY-NC-4.0 |
-| **E-FPDS** | Stage 1 **쓰러진 사람 BBOX** 6,982장 (노년 413장), YOLO 포맷 | 미확인 | SharePoint 직접 링크 | 인용 필수 |
+| **E-FPDS** | Stage 1 **쓰러진 사람 BBOX** 6,982장 (노년 413장) | ~2.3GB (train 재다운로드 중) | 브라우저 → rclone → `falldata/efpds/` (valid·test·FPDS_info 업로드 중) | 인용 필수 |
 | **URFD** | 연속 시퀀스, RGB+depth+가속도 | 7.98GB (zip 170 + csv 140) | **Drive 확보 완료** (`falldata/urfd/` + manifest.json, 크기 검증) | CC-BY-NC-SA-4.0 |
 | CMDFall | **연속 다중뷰 384편** — OmniFall 라벨은 있고 영상만 없음 | 대용량 | 저자 이메일 요청 | 연구용 |
 | Toyota Smarthome | **60–80세 노인 ADL**, 긴 정지 구간 (미동 음성 샘플) | 대용량 | 라이선스 폼 | 연구용 |
@@ -145,6 +145,18 @@ OF-Syn 은 합성이라 **실측 성능 주장의 근거로는 쓰지 않는다.
 ablation(같은 낙상을 eye/low/high/top × front/rear/left/right 로 본 결과)에 쓴다 — AI Hub
 베이스라인의 카메라 의존성과 대비되는 본 연구의 핵심 주장을 검증하는 데 맞는 도구다.
 AV1 코덱이라 OpenCV 가 못 읽을 수 있어 ffmpeg 로 h264 트랜스코딩이 필요하다.
+
+### E-FPDS 라벨 형식 — "YOLO" 가 아니다
+
+페이지는 YOLO 호환이라 하지만 실제 txt 는 **`class x_min x_max y_min y_max`** 픽셀 절대좌표다
+(darknet BBox-Label-Tool 형식). 640×480 이미지의 `1 173 562 367 472` 를 `x1 y1 x2 y2` 로 읽으면
+y=562 가 높이를 넘어 모순이고, `x_min x_max y_min y_max` 로 읽어야 x 173~562, y 367~472 의
+넓고 낮은 박스(누운 사람)가 된다. 학습 전에 YOLO 정규화(`xc yc w h`, 0~1)로 변환한다.
+이미지 해상도가 섞여 있으므로(640×480, 1920×1080 급) 변환 시 각 이미지 크기를 읽어야 한다.
+
+split 구성(`FPDS_info/Info_splits.txt`): train 4,808장(split01·02·03·10·11) · valid 1,201장(split12·13) ·
+test 973장(split04~08). split11 은 2,214장 전부 fallen, test 의 split05 는 non-fallen 이 다수 —
+분포가 split 마다 크게 달라 **split 단위 평가에서 편향**이 생길 수 있다.
 
 ## 그 외
 
