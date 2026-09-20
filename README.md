@@ -108,7 +108,10 @@ split은 반드시 **클립 단위**로 한다.
 
 ## 진행 상황
 
-현황은 [docs/status.md](docs/status.md), 다음 작업 계획은 [docs/next_steps.md](docs/next_steps.md) 참고.
+**실행 방법은 [docs/how_to_run.md](docs/how_to_run.md)** — 명령어, 결과 저장 위치, 문제 해결.
+
+현황은 [docs/status.md](docs/status.md), 다음 작업 계획은 [docs/next_steps.md](docs/next_steps.md),
+베이스라인 재현 기록은 [docs/baseline_run.md](docs/baseline_run.md) 참고.
 
 - [x] 데이터셋 조사 및 선정
 - [x] AI Hub 데이터 신청 승인
