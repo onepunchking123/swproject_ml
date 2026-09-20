@@ -74,6 +74,34 @@ colab whoami            # Email 이 바뀌었는지 확인
 전환 후에는 이전 계정의 세션이 CLI 에 보이지 않으므로, **전환 전에 `colab stop` 으로
 모두 종료**해야 유닛이 새지 않는다.
 
+### Drive 마운트가 `mount failed` 로 실패하면 — 한 번 더 시도한다
+
+`colab drivemount` 는 브라우저 승인 → "Credentials propagated" → `drive.mount()` 순으로
+진행되는데, 첫 시도에서 다음처럼 실패할 수 있다 (2026-09-20 실측):
+
+```
+ValueError: mount failed
+```
+
+`/root/.config/Google/DriveFS/Logs/drive_fs.txt` 를 보면 원인이 나온다:
+
+```
+metadata_server_credential.cc: Failed to request .../guest-attributes/auth/user-id
+HTTP code: 404 → Account context authorization failed → CANNOT_START_CORE
+```
+
+DriveFS 가 시작될 때 VM 메타데이터 서버에 자격증명이 **아직 기록되지 않은** 경쟁 조건이다.
+타임아웃(`QueryManager timed out`)도, 도메인 정책 차단도 아니다. 몇 초 뒤 같은 명령을
+다시 실행하면 자격증명이 이미 있어 URL 단계 없이 바로 `Mounted at /content/drive` 가 된다.
+
+확인 방법 (VM 에서): `auth/user-id` 가 200 이면 재시도만 하면 된다.
+
+```python
+urllib.request.urlopen(urllib.request.Request(
+    "http://172.28.0.1:8009/computeMetadata/v1/instance/guest-attributes/auth/user-id",
+    headers={"Metadata-Flavor": "Google"})).status   # 200
+```
+
 ## 세션 운영
 
 ```bash
