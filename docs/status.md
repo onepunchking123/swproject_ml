@@ -151,23 +151,19 @@ AI Hub 자체 GPU 서버. 데이터 다운로드가 불필요하고 무료.
 
 ## 지금 바로 할 수 있는 것
 
-### 1. 라벨 데이터 확보 (142MB, 맥북에서 가능)
+### 1. 라벨 데이터 — 확보·분석 완료 (2026-09-20)
 
-```bash
-curl -sS -o ~/bin/aihubshell https://api.aihub.or.kr/api/aihubshell.do
-chmod +x ~/bin/aihubshell
-cd ~/Documents/fall-detection && mkdir -p data/labels && cd data/labels
-~/bin/aihubshell -mode d -datasetkey 71641 -filekey 531136,531138 \
-  -aihubapikey "$(cat ~/.aihub_key)"
-```
+`falldata/aihub/531136/TL.zip.part000`, `falldata/aihub/531138/VL.zip.part000` 에 있다.
+상세는 [aihub_labels.md](aihub_labels.md). 핵심:
 
-이것으로 가능한 작업:
-
-- **실제 JSON 스키마 확인** — 추측이 아닌 실제 구조에 맞춘 전처리 코드 작성
-- 클래스 분포, 클립 구조, 키포인트 형식 파악
-- **Stage 2 (시계열 낙상 분류) 전체** — LSTM/GRU/1D-CNN/ST-GCN 비교 실험.
-  입력이 키포인트 좌표뿐이라 이미지가 필요 없고, 모델이 작아 맥북에서 학습된다
-- 규칙 기반 베이스라인 (종횡비 + 몸통각도 + 하강속도) 구현·평가
+- **키포인트는 라벨에 없다.** 낙상 구간 프레임(`fall_start_frame`/`fall_end_frame`)과 클립당 BBOX 10장뿐이다.
+  AI Hub 로 Stage 2 를 학습하려면 **영상(VS.zip)에서 YOLO-pose 로 직접 추출**해야 한다 —
+  "라벨만으로 Stage 2 가능" 은 클립을 확보한 OmniFall 에는 맞고 AI Hub 에는 틀렸다.
+- 낙상 구간은 전 클립에서 **정확히 60프레임(1초) 고정** — `fall_end` 는 관례값, `fall_start` 만 신뢰.
+- Training 18,128 클립(2,266 장면 × 8 카메라) · Validation 2,272 클립(284 장면). 배우 76% 중장년·노년,
+  장소는 요양병원 병실·집 거실 주류. **split 은 장면 단위**로.
+- BBOX 22,720(V) + 181,280(T) 장은 Stage 1 검출기 학습에 바로 쓸 수 있다 (원천 JPG 필요).
+- 규칙 기반 베이스라인(종횡비 + 몸통각도 + 하강속도)은 OmniFall 클립으로 먼저 진행한다.
 
 ### 2. 공개 데이터셋으로 Stage 1 프로토타입
 
