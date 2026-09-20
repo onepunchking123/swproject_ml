@@ -128,6 +128,7 @@ split은 반드시 **클립 단위**로 한다.
 - [x] 데이터셋 실제 구성 확인 (491GB, Training 원천은 분할 불가)
 - [x] 공개 데이터셋 OmniFall 30.06GB → Drive (8/8 MD5 검증)
 - [x] AI Hub 라벨(TL·VL 142MB) → Drive (디스크 없는 스트리밍, `--buffer-dir`)
+- [x] 2차 공개 데이터 OF-Syn 9.72GB(합성·노년·카메라 라벨) + URFD 7.98GB → Drive (`fetch_public.py`, 11분)
 - [ ] AI Hub VS 55GB·TS 436GB → Drive — **GCP 서울 VM** 에서 ([docs/gcp_seoul_relay.md](docs/gcp_seoul_relay.md))
 - [x] 라벨 JSON 스키마 분석 — **키포인트 없음**, 낙상 구간 프레임 + BBOX 10장/클립 ([docs/aihub_labels.md](docs/aihub_labels.md))
 - [ ] 전처리 파이프라인

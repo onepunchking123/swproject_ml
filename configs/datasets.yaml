@@ -183,7 +183,8 @@ sources:
   omnifall_syn:
     file: data_files/omnifall-synthetic_av1.tar
     url: https://huggingface.co/datasets/simplexsigil2/omnifall/resolve/main/data_files/omnifall-synthetic_av1.tar
-    size_bytes: 9720000000          # HF API LFS 메타 9.72GB (정확값은 다운로드 시 Content-Length 로 대조)
+    size_bytes: 9716480000          # HEAD Content-Length / x-linked-size (2026-09-20)
+    sha256: c1f7b3beeedf2ffbdb3a3c131da512ceef0d788a93aac93c656b3978a945f13a   # HF x-linked-etag (LFS oid)
     videos: 12000                   # 12,000 AV1 mp4. split: train 15,344 / val 1,956 / test 1,928 구간
     codec: av1                      # OpenCV 가 못 읽을 수 있다 → ffmpeg 로 h264 트랜스코딩 후 사용
     labels: labels/of-syn.csv       # 7 core + 12 인구통계·카메라 컬럼 (age_group, camera_elevation, camera_azimuth ...)
@@ -194,6 +195,7 @@ sources:
       - "노년: age_group=elderly_65_plus (staged 데이터셋에는 거의 없음)"
       - "카메라 독립성: camera_elevation {eye,low,high,top} × azimuth {front,rear,left,right} 라벨로 통제 실험 가능"
     role: 학습 보조 + 카메라 위치 ablation. 합성이므로 실측 성능 주장에는 쓰지 않는다
+    drive_dest: falldata/omnifall_syn
 
   # ───────────────────────────────────────────────────────────────────
   # 2c) E-FPDS — 쓰러진 사람 BBOX 이미지 (Stage 1). UAH GRAM, SharePoint 직접 링크
@@ -232,6 +234,8 @@ sources:
     cams: {fall: [cam0, cam1], adl: [cam0]}
     url_pattern: "https://fenix.ur.edu.pl/~mkepski/ds/data/{type}-{nn:02d}-{cam}-{modality}.zip"
     modalities: {rgb: rgb, depth: d}    # 가속도: {type}-{nn}-acc.csv , 동기화: {type}-{nn}-data.csv
+    total_bytes_measured: {rgb: 5680000000, depth_cam0: 2300000000}   # HEAD 110회 집계 (2026-09-20), 누락 0
+    drive_dest: falldata/urfd
     format_note: zip 안은 PNG 프레임 시퀀스 (영상 파일이 아님) — 프레임→클립 변환 필요
     role: 교차 평가 + depth/가속도 멀티모달 확장 여지
 
