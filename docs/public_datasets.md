@@ -162,7 +162,7 @@ test 973장(split04~08). split11 은 2,214장 전부 fallen, test 의 split05 �
 
 | 후보 | 채우는 빈 곳 | 규모 | 입수 | 라이선스 |
 |---|---|---|---|---|
-| **FallVision** | 침대·의자·서서 낙상(병실 시나리오), 58명 | raw 16.8GB (+키포인트 CSV 0.4GB; mask 32GB 는 불필요) | **Harvard Dataverse API 직접** — Colab 고속 | **CC0** — 서비스 학습 가능 |
+| **FallVision** | 침대·의자·서서 낙상(병실 시나리오), 58명 | raw 16.8GB + 키포인트 CSV 0.4GB (mask 32GB 제외) | **Drive 확보 완료** (`falldata/fallvision/`, 40/40 MD5, 79~91MB/s) | **CC0** — 서비스 학습 가능 |
 | **TF-66** (Thermal Fall 66) | **야간·열화상**, 66명, 노인·병원 서브셋 | 562 낙상 + 250 비낙상, 140×60 @4fps | 저자 이메일 문의 (프리프린트에서 링크 삭제) | 비상업 |
 | NTU RGB+D 120 | 3D 골격 대규모, `A43 falling` | 114,480 샘플 (골격 zip ~10GB) | ROSE Lab 등록 | 학술 |
 | **ETRI-Activity3D** | **한국 노인 50명(64~88세)**, 아파트, Kinect 8대 | 112,620 샘플, RGB+D+골격 | ETRI 나눔 신청 (접속 거부로 미확인) | 학술 (낙상 클래스 포함 여부 확인 필요) |

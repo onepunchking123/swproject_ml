@@ -247,6 +247,9 @@ sources:
       mask: {files: 20, size_gb: 32.4, note: "배경 제거(랜드마크) 영상 — 불필요"}
       keypoints_csv: {files: 20, size_gb: 0.4, note: "저자가 뽑은 랜드마크 CSV (파일명 'ketpoints' 오타 6개) — 비교용"}
     fetch_plan: "raw + keypoints_csv ≈ 17.2GB → falldata/fallvision/ (Colab, Dataverse API 직접)"
+    drive_dest: falldata/fallvision
+    status: "Drive 확보 완료 2026-09-21 — 40/40 MD5 검증 (raw 20 + keypoints_csv 20), manifest.json"
+    pitfall: "동시 연결이 많으면(2파일×16) 일부 403 — 재시도는 연결 4·파일 1개씩"
     format_note: "rar 분할 압축 — VM 에 unrar 또는 7z 필요"
     fills_gap: "침대·의자에서의 낙상(치매환자 병실 시나리오) + CC0 라이선스"
 
