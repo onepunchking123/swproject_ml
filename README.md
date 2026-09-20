@@ -116,7 +116,9 @@ split은 반드시 **클립 단위**로 한다.
 
 ## 진행 상황
 
-**실행 방법은 [docs/how_to_run.md](docs/how_to_run.md)** — 명령어, 결과 저장 위치, 문제 해결.
+**학습 파이프라인은 [docs/pipeline.md](docs/pipeline.md)** — 작업 순서, 데이터, 설계 근거.
+
+AI Hub 베이스라인 실행은 [docs/how_to_run.md](docs/how_to_run.md).
 
 현황은 [docs/status.md](docs/status.md), 다음 작업 계획은 [docs/next_steps.md](docs/next_steps.md),
 베이스라인 재현 기록은 [docs/baseline_run.md](docs/baseline_run.md) 참고.
