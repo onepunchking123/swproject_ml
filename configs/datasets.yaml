@@ -218,9 +218,9 @@ sources:
       test:  {splits: [split04, split05, split06, split07, split08], frames: 973, fallen: 391, nonfallen: 830}
     files:
       - {name: train.tar.gz, status: "재다운로드 필요 — 1차 다운로드가 104MB 에서 잘림 (gzip EOF, png 248장만)"}
-      - {name: valid.tar.gz, size_bytes: 433222189, status: 정상 (png 1175 / txt 1201)}
-      - {name: test.tar.gz,  size_bytes: 373167151, status: 정상 (png 973 / txt 973)}
-      - {name: FPDS_info/,   status: "labels/ 1,201 txt + Info_splits.txt + 분할 스크립트"}
+      - {name: valid.tar.gz, size_bytes: 433222189, status: "Drive 에 있음 (png 1175 / txt 1201)"}
+      - {name: test.tar.gz,  size_bytes: 373167151, status: "Drive 에 있음 (png 973 / txt 973)"}
+      - {name: FPDS_info.tar.gz, status: "Drive 에 있음 — labels/ 1,201 txt + Info_splits.txt + 분할 스크립트를 하나로 묶음 (개별 업로드는 파일당 API 지연으로 80분)"}
     drive_dest: falldata/efpds
     download: SharePoint 직접 링크 — curl 은 HTML 만 받으므로 **브라우저로 받아** rclone 으로 Drive 에 올린다
     license: 인용 필수 — Maldonado-Bascón et al., "Fallen People Detection Capabilities Using Assistive Robot", Electronics 2019
