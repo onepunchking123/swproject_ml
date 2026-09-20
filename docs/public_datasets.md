@@ -158,6 +158,25 @@ split 구성(`FPDS_info/Info_splits.txt`): train 4,808장(split01·02·03·10·1
 test 973장(split04~08). split11 은 2,214장 전부 fallen, test 의 split05 는 non-fallen 이 다수 —
 분포가 split 마다 크게 달라 **split 단위 평가에서 편향**이 생길 수 있다.
 
+## 3차 조사 — 야간·노년·골격·정상 정지 축 (2026-09-20)
+
+| 후보 | 채우는 빈 곳 | 규모 | 입수 | 라이선스 |
+|---|---|---|---|---|
+| **FallVision** | 침대·의자·서서 낙상(병실 시나리오), 58명 | raw 16.8GB (+키포인트 CSV 0.4GB; mask 32GB 는 불필요) | **Harvard Dataverse API 직접** — Colab 고속 | **CC0** — 서비스 학습 가능 |
+| **TF-66** (Thermal Fall 66) | **야간·열화상**, 66명, 노인·병원 서브셋 | 562 낙상 + 250 비낙상, 140×60 @4fps | 저자 이메일 문의 (프리프린트에서 링크 삭제) | 비상업 |
+| NTU RGB+D 120 | 3D 골격 대규모, `A43 falling` | 114,480 샘플 (골격 zip ~10GB) | ROSE Lab 등록 | 학술 |
+| **ETRI-Activity3D** | **한국 노인 50명(64~88세)**, 아파트, Kinect 8대 | 112,620 샘플, RGB+D+골격 | ETRI 나눔 신청 (접속 거부로 미확인) | 학술 (낙상 클래스 포함 여부 확인 필요) |
+| Toyota Smarthome **Untrimmed** | 노인 **평균 21분 연속 영상 536편** — 미동 음성 샘플 | 51 활동, RGB+D+골격 | 라이선스 폼 | 학술 |
+| HOMAGE | 가정 다중 시점 27명 | 대용량 | 저장소 안내 | 학술 (우선순위 낮음) |
+
+제외: IR-Fall 2024(비공개), figshare "SDU dataset"(SDUFall 아님), TST Fall v2(IEEE DataPort 구독),
+FUKinect-Fall(depth 만·라이선스 미표기), MSR DailyActivity3D(소규모, 필요 시).
+
+**FallVision 이 이번 조사의 최대 수확이다.** CC0 라 라이선스 제약이 전혀 없고, 침대·의자에서의
+낙상이 있으며(치매환자 병실에서 가장 흔한 시나리오), Dataverse API 로 Colab 에서 바로 받는다.
+TF-66 은 해상도 140×60 이라 YOLO-pose 를 못 쓰고 별도 열화상 분기 모델이 필요하다 — 야간
+모니터링을 논문 범위에 넣을지에 따라 결정한다.
+
 ## 그 외
 
 ### URFD

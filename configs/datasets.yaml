@@ -227,6 +227,45 @@ sources:
     fills_gap: "Stage 1 — COCO 사전학습 검출기가 약한 '누워 있는/쓰러진 사람' 자세"
 
   # ───────────────────────────────────────────────────────────────────
+  # 2e) FallVision — Harvard Dataverse, CC0 1.0. 58명, 침대·의자·서서 낙상 + 비낙상
+  # ───────────────────────────────────────────────────────────────────
+  fallvision:
+    doi: 10.7910/DVN/75QPKK
+    api: "https://dataverse.harvard.edu/api/datasets/:persistentId/?persistentId=doi:10.7910/DVN/75QPKK"
+    download_url_pattern: "https://dataverse.harvard.edu/api/access/datafile/{id}"
+    license: CC0-1.0                    # 퍼블릭 도메인 — 서비스 모델 학습에도 사용 가능
+    published: 2025-02-02
+    paper: "Data in Brief 2025, doi:10.1016/j.dib.2025.111440"
+    subjects: 58
+    capture: "Optoma SC26B 4K 30fps 웹캠 + iPhone 11 Pro Max, Galaxy A32, Pixel 6a"
+    geo_block: false
+    files_total: 60
+    size_total_gb: 49.57
+    naming: "{f|nf}_{raw|mask}_{b|c|s}_{n}.rar — f 낙상/nf 비낙상 · b 침대/c 의자/s 서서 · rar 분할"
+    subsets:
+      raw:  {files: 20, size_gb: 16.8, note: "원본 영상 — YOLO-pose 로 키포인트를 직접 뽑으므로 이것만 필요"}
+      mask: {files: 20, size_gb: 32.4, note: "배경 제거(랜드마크) 영상 — 불필요"}
+      keypoints_csv: {files: 20, size_gb: 0.4, note: "저자가 뽑은 랜드마크 CSV (파일명 'ketpoints' 오타 6개) — 비교용"}
+    fetch_plan: "raw + keypoints_csv ≈ 17.2GB → falldata/fallvision/ (Colab, Dataverse API 직접)"
+    format_note: "rar 분할 압축 — VM 에 unrar 또는 7z 필요"
+    fills_gap: "침대·의자에서의 낙상(치매환자 병실 시나리오) + CC0 라이선스"
+
+  # ───────────────────────────────────────────────────────────────────
+  # 2f) TF-66 — 열화상(야간·프라이버시) 낙상. 비상업 공개, 접근은 저자 문의
+  # ───────────────────────────────────────────────────────────────────
+  tf66:
+    paper: "Thermal Fall 66 (Engineering Applications of AI, 2025) · TechRxiv 프리프린트"
+    sensor: "천장 부착 Calumino Thermal Sensor EVK, 140x60 @ 4fps"
+    videos: {fall: 562, nonfall: 250}
+    subjects: 66
+    environments: 9
+    subsets: [height-based, senior-specific, hospital]
+    license: 비상업 공개
+    access: "프리프린트에서 저장소 링크가 리뷰용으로 삭제됨 — 저자(Lakehead Univ., C. Silver / T. Akilan) 이메일 문의 또는 출판본의 GitHub 링크"
+    fills_gap: "야간·프라이버시 — 치매환자 야간 모니터링. 해상도 140x60 이라 YOLO-pose 불가, 별도 열화상 분기 모델용"
+    status: contact_authors
+
+  # ───────────────────────────────────────────────────────────────────
   # 2d) 요청이 필요한 데이터셋 (사용자가 직접 신청)
   # ───────────────────────────────────────────────────────────────────
   request_required:
@@ -238,6 +277,31 @@ sources:
       page: https://project.inria.fr/toyotasmarthome/
       how: 라이선스 폼 (학술 연구 전용)
       why: 60–80세 노인 18명의 실제 일상(7 Kinect, RGB+D). 낙상은 없지만 **오래 앉음·누움 등 정상 정지 구간**이 풍부 — 미동 판정의 음성(정상) 샘플
+    toyota_smarthome_untrimmed:
+      page: https://project.inria.fr/toyotasmarthome/
+      how: "같은 폼 (TSU 선택)"
+      why: "같은 노인 18명, 평균 21분짜리 연속 영상 536편, 51 활동 라벨, RGB+D+3D 골격 — 미동 판정의 장시간 음성 구간에 가장 적합"
+    ntu_rgbd_120:
+      page: https://rose1.ntu.edu.sg/dataset/actionRecognition/
+      how: "ROSE Lab 회원 등록 + 동의 (학술)"
+      why: "114,480 샘플 · 120 클래스 · A43 falling · 3D 골격 25관절 — Stage 2 골격 모델 사전학습. 골격 zip 2개면 ~10GB. 실험실 환경·젊은 피험자라 도메인은 다름"
+      note: "figshare 등 비공식 재배포본이 있으나 라이선스상 공식 경로로 받는다"
+    etri_activity3d:
+      paper: https://arxiv.org/abs/2003.01920
+      how: "ETRI AI 나눔(nanum.etri.re.kr) 신청 — 2026-09-20 접속 거부로 미확인. 저장소 github.com/ai4r/AIR-Action-Recognition 은 전처리 .mat(Google Drive)만 제공"
+      why: "한국 노인 50명(64~88세, 평균 77세) + 청년 50명, 55 일상 행동, 112,620 샘플, Kinect v2 8대(4 플랫폼 × 70/120cm), RGB 1920x1080 + depth + 25관절 골격, 아파트 환경 — 서비스 도메인(한국·노인·실내)과 가장 가까움"
+      caveat: "55 클래스에 낙상이 포함되는지 미확인 — 클래스 목록 확인 필요"
+    homage:
+      page: https://github.com/nishantrai18/homage
+      how: "저장소 안내에 따라 요청"
+      why: "가정 내 다중 시점(1인칭 + 3인칭) 27명, 부엌·욕실·침실·거실 — 시점 다양성·정상 활동 음성 샘플"
+      priority: low
+  excluded:
+    ir_fall_2024: "MDPI Sensors 2024 — 'data contained within the article', 공개 저장소 없음"
+    figshare_sdu_7166453: "SDUFall 이 아님 (CSV 4개). SDUFall 원본은 산동대 요청"
+    tst_fall_v2: "IEEE DataPort 구독 필요 — 젊은 배우 11명 depth+골격, 우선순위 낮음"
+    fukinect_fall: "SharePoint 7.5GB, depth+골격만(RGB 없음), 라이선스 미표기 — 필요 시 브라우저 다운로드"
+    msr_dailyactivity3d: "16 활동(lie down on sofa 포함) 10명, SharePoint 게스트 폴더 — 소규모, 필요 시"
 
   # ───────────────────────────────────────────────────────────────────
   # 3) URFD — 공식 사이트 직접 (wget 가능), Colab 에서 다운로드 가능
