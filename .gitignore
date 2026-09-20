@@ -1,0 +1,37 @@
+# ── 절대 커밋하면 안 되는 것 ──────────────────────────────
+# AI Hub API Key, 계정 정보
+.env
+*.key
+secrets.*
+
+# 데이터셋 (300GB — AI Hub 재배포는 이용약관 위반)
+data/
+datasets/
+raw/
+*.tar
+*.zip
+*.7z
+
+# 학습 산출물 (용량 큼, Drive에 보관)
+runs/
+weights/
+*.pt
+*.onnx
+*.mlpackage
+*.engine
+
+# ── 일반 ─────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+venv/
+.venv/
+env/
+
+.DS_Store
+.idea/
+.vscode/
+
+# OMC 운영 아티팩트 (.omc/skills 는 예외적으로 커밋 가능)
+.omc/
+!.omc/skills/
