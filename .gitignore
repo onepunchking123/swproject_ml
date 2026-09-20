@@ -45,3 +45,6 @@ runs/keypoints/
 
 # 가상환경
 venv_aihub/
+
+# 압축 해제한 라벨 (재생성 가능)
+data/
