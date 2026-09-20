@@ -117,3 +117,32 @@ scripts/     전처리 · 학습 · 평가
 configs/     data.yaml, 하이퍼파라미터
 docs/        실험 계획서, 결과 정리
 ```
+
+## Colab CLI
+
+브라우저 없이 터미널에서 Colab GPU를 사용한다 (2026년 6월 출시 공식 도구).
+
+```bash
+uv tool install google-colab-cli
+colab sessions          # 최초 1회 OAuth 인증 (브라우저에서 코드 받아 붙여넣기)
+```
+
+주요 명령:
+
+| 명령 | 용도 |
+|---|---|
+| `colab new -s <이름> [--gpu T4]` | 세션 생성 (`-s` 항상 지정) |
+| `colab exec -s <이름> -f script.py` | 로컬 스크립트를 VM에서 실행 |
+| `colab run --gpu T4 script.py` | 생성 → 실행 → 자동 해제 (일회성) |
+| `colab upload / download` | 파일 전송 |
+| `colab log -s <이름> -o out.ipynb` | 세션 기록을 노트북으로 내보내기 |
+| `colab stop -s <이름>` | **종료 (필수)** |
+
+### 주의
+
+- **세션은 반드시 `colab stop`** — 방치하면 컴퓨팅 유닛이 24시간까지 계속 소진된다.
+- 커널 상태는 `exec` 호출 간 유지된다. 매번 import를 반복할 필요 없다.
+- 기본 작업 디렉토리는 `/content`. 절대경로를 쓴다.
+- GPU 할당은 계정 등급에 따라 제한된다. 400 에러면 T4로 낮추거나 CPU로 돌린다.
+- `drivemount`, `auth`, `repl`, `console` 은 TTY가 필요해 사람이 직접 실행해야 한다.
+- 데이터 탐색·전처리는 CPU 세션으로 — GPU 유닛을 아낀다.
