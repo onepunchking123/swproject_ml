@@ -43,7 +43,9 @@ import json
 import re
 import subprocess
 import sys
+import queue
 import tarfile
+import threading
 import time
 from pathlib import Path
 
@@ -95,14 +97,48 @@ def pump(src, size: int, sink) -> int:
     return done
 
 
+def uploader(q: "queue.Queue", results: list, stop: threading.Event) -> None:
+    """큐에서 조각을 꺼내 Drive 로 올리고 로컬 파일을 지운다. 다운로드와 병행된다."""
+    while True:
+        item = q.get()
+        if item is None:
+            q.task_done()
+            return
+        tmp, remote, size, leaf = item
+        try:
+            t0 = time.time()
+            r = subprocess.run(["rclone", "copyto", str(tmp), remote], capture_output=True, text=True)
+            got = rclone_size(remote)
+            if r.returncode == 0 and got == size:
+                log(f"  올림 {leaf}  ↑{size / max(time.time() - t0, 1e-6) / 1e6:.1f}MB/s  (대기 {q.qsize()})")
+                results.append(True)
+            else:
+                log(f"  업로드 실패 {leaf}: rclone={r.returncode} size={got} {r.stderr.strip()[:160]}")
+                subprocess.run(["rclone", "deletefile", remote], capture_output=True)
+                results.append(False)
+                stop.set()
+        finally:
+            tmp.unlink(missing_ok=True)
+            q.task_done()
+
+
 def stream_filekey(dataset: str, fk: str, dest: str, key: str, dry_run: bool,
                    buffer_dir: Path | None = None,
-                   member_buffer: Path | None = None) -> bool:
+                   member_buffer: Path | None = None, max_pending: int = 3) -> bool:
     url = BASE.format(dataset=dataset, filekey=fk)
     dest_fk = f"{dest}/{fk}"
     log(f"▶ filekey {fk} → {dest_fk}" + ("  (dry-run: 업로드 없음)" if dry_run else ""))
     parts, ok, t_start = [], True, time.time()
     curl, tar_path = None, None
+    # 업로드 대기 조각이 쌓이면 디스크가 찬다. maxsize 로 제한하면 큐가 찰 때
+    # put() 이 블록되어 다운로드가 자연스럽게 느려진다 (역압).
+    uploads: queue.Queue = queue.Queue(maxsize=max_pending)
+    up_results: list[bool] = []
+    up_stop = threading.Event()
+    up_thread = None
+    if member_buffer is not None and not dry_run:
+        up_thread = threading.Thread(target=uploader, args=(uploads, up_results, up_stop), daemon=True)
+        up_thread.start()
     if buffer_dir is not None:
         # 업로드가 다운로드보다 느린 회선에서는 파이프가 막혀 AI Hub 서버가 연결을 끊는다 (실측).
         # tar 를 디스크에 먼저 받아 두면 서버 속도로 받고, 업로드는 따로 진행된다. 디스크가 tar 크기만큼 필요하다.
@@ -138,29 +174,23 @@ def stream_filekey(dataset: str, fk: str, dest: str, key: str, dry_run: bool,
                 elif rclone_size(remote) == ti.size:
                     log(f"  건너뜀 (Drive 에 있음) {leaf}  {ti.size:,} B"); pump(f, ti.size, None)
                 elif member_buffer is not None:
-                    # 조각 하나를 디스크에 받아 업로드하고 즉시 지운다. 버퍼가 tar 전체가 아니라
-                    # 조각 하나 크기(보통 1GB)만 필요하므로, 디스크가 작아도 55GB 를 처리할 수 있다.
-                    # 파이프가 막혀 서버가 연결을 끊는 문제도 같이 해결된다.
-                    t0 = time.time()
+                    # 조각을 디스크에 받고, 업로드는 **백그라운드 스레드**에 맡긴다.
+                    #
+                    # 순차로 하면(받기 → 올리기 → 받기) 업로드하는 동안 curl 스트림을 읽지
+                    # 않아 AI Hub 가 유휴 연결로 보고 끊는다 — 실측: 1GB 업로드 10.5분 뒤
+                    # `curl (56) Connection reset by peer`.
+                    #
+                    # 업로드를 분리하면 다운로드가 쉬지 않고 흘러 연결이 유지되고,
+                    # 느린 업로드(1.7MB/s)가 빠른 다운로드(3.1MB/s) 뒤에 겹쳐 전체 시간도 준다.
+                    # 디스크는 미처 못 올린 조각만큼 쌓이므로 대기 수를 제한한다.
                     member_buffer.mkdir(parents=True, exist_ok=True)
+                    t0 = time.time()
                     tmp = member_buffer / f"{leaf}.tmp"
-                    try:
-                        with tmp.open("wb") as out:
-                            pump(f, ti.size, out)
-                        dl = time.time() - t0
-                        t1 = time.time()
-                        r = subprocess.run(["rclone", "copyto", str(tmp), remote],
-                                           capture_output=True, text=True)
-                        got = rclone_size(remote)
-                        if r.returncode == 0 and got == ti.size:
-                            log(f"  완료 {leaf}  {ti.size / 1e6:.0f}MB  "
-                                f"↓{ti.size / max(dl, 1e-6) / 1e6:.1f} ↑{ti.size / max(time.time() - t1, 1e-6) / 1e6:.1f}MB/s")
-                        else:
-                            ok = False
-                            log(f"  실패 {leaf}: rclone={r.returncode} size={got} {r.stderr.strip()[:160]}")
-                            subprocess.run(["rclone", "deletefile", remote], capture_output=True)
-                    finally:
-                        tmp.unlink(missing_ok=True)
+                    with tmp.open("wb") as out:
+                        pump(f, ti.size, out)
+                    log(f"  받음 {leaf}  {ti.size / 1e6:.0f}MB  "
+                        f"↓{ti.size / max(time.time() - t0, 1e-6) / 1e6:.1f}MB/s  (업로드 대기 {uploads.qsize()})")
+                    uploads.put((tmp, remote, ti.size, leaf))
                 else:
                     t0 = time.time()
                     rc = subprocess.Popen(["rclone", "rcat", "--size", str(ti.size), remote],
@@ -192,6 +222,12 @@ def stream_filekey(dataset: str, fk: str, dest: str, key: str, dry_run: bool,
                 log(f"  curl 종료 코드 {curl.returncode}: {curl.stderr.read().decode(errors='replace').strip()[:200] if curl.stderr else ''}")
         if tar_path is not None:
             src.close(); tar_path.unlink(missing_ok=True)
+        if up_thread is not None:
+            log(f"  업로드 대기 중 ({uploads.qsize()}개 남음)")
+            uploads.put(None)
+            up_thread.join()
+            if not all(up_results) or up_stop.is_set():
+                ok = False
 
     parts.sort(key=lambda p: (p["base"], p["index"]))
     total = sum(p["size"] for p in parts)
@@ -213,6 +249,8 @@ def main() -> int:
     ap.add_argument("--member-buffer", type=Path,
                     help="조각(.partN) 하나씩 디스크에 받아 업로드하고 즉시 삭제 "
                          "(조각 하나 크기만 필요 — 보통 1GB. 디스크가 작을 때 권장)")
+    ap.add_argument("--max-pending", type=int, default=3,
+                    help="업로드 대기 조각 최대 개수 (조각당 1GB 디스크를 쓴다, 기본 3)")
     args = ap.parse_args()
     if args.buffer_dir and args.member_buffer:
         sys.exit("--buffer-dir 와 --member-buffer 는 함께 쓸 수 없다")
@@ -220,7 +258,7 @@ def main() -> int:
     ok = True
     for fk in args.filekey:
         ok &= stream_filekey(args.dataset, fk, args.dest, key, args.dry_run,
-                             args.buffer_dir, args.member_buffer)
+                             args.buffer_dir, args.member_buffer, args.max_pending)
     return 0 if ok else 1
 
 
