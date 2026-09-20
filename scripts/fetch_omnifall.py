@@ -10,8 +10,11 @@
 `colab exec` 는 argv 를 전달하지 않으므로 설정은 아래 상수로 둔다.
 
 zip 하나씩 처리한다:
-    다운로드(중단 시 Range 로 재개) → MD5 검증 → Drive 복사 → 크기 대조
-    → `<이름>.md5` 사이드카 기록 → 로컬 삭제
+    다운로드 → MD5 검증 → Drive 복사 → 크기 대조 → `<이름>.md5` 사이드카 기록 → 로컬 삭제
+
+다운로드는 aria2c 가 있으면 다중 연결로 받는다. Zenodo 는 연결당 약 1MB/s 로 제한하지만
+연결 수에 거의 선형으로 합산된다 (2026-09-20 실측: 단일 1.05MB/s, 4연결 합 3.5MB/s).
+aria2c 가 없으면 urllib 단일 연결(Range 재개)로 폴백한다. 둘 다 부분 파일을 이어받는다.
 
 Drive 에 같은 크기의 파일과 사이드카가 이미 있으면 건너뛰므로 재실행이 안전하다.
 해제와 중복 제거는 여기서 하지 않는다 — Drive FUSE 위에서 해제하지 않고,
@@ -23,6 +26,7 @@ from __future__ import annotations
 import hashlib
 import os
 import shutil
+import subprocess
 import sys
 import time
 import urllib.error
@@ -40,6 +44,7 @@ ONLY: list[str] = []      # 예: ["Cauca_fall.zip"]. 비어 있으면 전부 —
 MAX_GB: float | None = None   # 이번 실행의 누적 용량 상한. 예: 7 → 작은 5개까지만
 RETRIES = 3
 CHUNK = 8 << 20           # 8MB
+ARIA_CONNECTIONS = 16     # Zenodo 연결당 ~1MB/s → 16연결이면 10MB/s 이상 기대
 # ────────────────────────────────────────────────────────────────────────
 
 
@@ -85,8 +90,39 @@ def md5_of(path: Path) -> str:
     return h.hexdigest()
 
 
+def download_aria2(url: str, dst: Path, expected: int) -> bool:
+    """aria2c 다중 연결 다운로드. 성공하면 True, 실패·미설치면 False (호출자가 urllib 로 폴백)."""
+    aria = shutil.which("aria2c")
+    if not aria:
+        return False
+    if dst.exists() and dst.stat().st_size >= expected:
+        return True
+    cmd = [aria, "-x", str(ARIA_CONNECTIONS), "-s", str(ARIA_CONNECTIONS), "-k", "8M",
+           "-c", "--file-allocation=none", "--auto-file-renaming=false", "--allow-overwrite=true",
+           "--console-log-level=warn", "--summary-interval=15", "--max-tries=5", "--retry-wait=10",
+           "-d", str(dst.parent), "-o", dst.name, url]
+    log(f"  aria2c {ARIA_CONNECTIONS}연결")
+    t0 = time.time()
+    # 출력을 실시간으로 흘려보낸다 — 커널이 오래 침묵하면 colab exec 클라이언트가 끊는다
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+    assert proc.stdout is not None
+    for line in proc.stdout:
+        s = line.strip()
+        if "DL:" in s or "ERR" in s or "error" in s.lower():
+            log("  " + s[:120])
+    rc = proc.wait()
+    if rc != 0 or not dst.exists():
+        log(f"  aria2c 실패 (rc={rc}) — urllib 로 폴백")
+        return False
+    speed = (dst.stat().st_size) / max(time.time() - t0, 1e-6)
+    log(f"  {gb(dst.stat().st_size)} 완료, 평균 {speed / 1e6:.1f}MB/s")
+    return True
+
+
 def download(url: str, dst: Path, expected: int) -> None:
-    """이어받기를 지원하는 다운로드. 서버가 Range 를 무시하면 처음부터 받는다."""
+    """이어받기를 지원하는 다운로드. aria2c 우선, 없으면 urllib 단일 연결."""
+    if download_aria2(url, dst, expected):
+        return
     for attempt in range(1, RETRIES + 1):
         have = dst.stat().st_size if dst.exists() else 0
         if have >= expected:
