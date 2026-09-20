@@ -22,7 +22,8 @@ rclone 에 넘기므로**, 도중에 끊겨도 이미 올라간 조각은 남는
 사용법 (맥북, 한국 IP. 긴 작업은 caffeinate 로 잠들지 않게):
     python scripts/aihub_stream.py --filekey 531138 --dry-run                 # 구조만 (업로드 없음)
     python scripts/aihub_stream.py --filekey 531136 531138                    # 라벨 142MB
-    caffeinate -i python scripts/aihub_stream.py --filekey 531137             # VS.zip 55GB, ~7시간
+    python scripts/aihub_stream.py --filekey 531136 531138 --buffer-dir /tmp/aihub_buf   # 업로드가 느린 회선
+    caffeinate -i python scripts/aihub_stream.py --filekey 531137             # VS.zip 55GB (빠른 회선에서)
 
 API 키는 ~/.aihub_key 에서 읽는다. 출력에 키가 찍히지 않는다.
 """
@@ -86,16 +87,35 @@ def pump(src, size: int, sink) -> int:
     return done
 
 
-def stream_filekey(dataset: str, fk: str, dest: str, key: str, dry_run: bool) -> bool:
+def stream_filekey(dataset: str, fk: str, dest: str, key: str, dry_run: bool,
+                   buffer_dir: Path | None = None) -> bool:
     url = BASE.format(dataset=dataset, filekey=fk)
     dest_fk = f"{dest}/{fk}"
     log(f"▶ filekey {fk} → {dest_fk}" + ("  (dry-run: 업로드 없음)" if dry_run else ""))
-    curl = subprocess.Popen(["curl", "-sSL", "-H", f"apikey:{key}", url],
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    assert curl.stdout is not None
     parts, ok, t_start = [], True, time.time()
+    curl, tar_path = None, None
+    if buffer_dir is not None:
+        # 업로드가 다운로드보다 느린 회선에서는 파이프가 막혀 AI Hub 서버가 연결을 끊는다 (실측).
+        # tar 를 디스크에 먼저 받아 두면 서버 속도로 받고, 업로드는 따로 진행된다. 디스크가 tar 크기만큼 필요하다.
+        buffer_dir.mkdir(parents=True, exist_ok=True)
+        tar_path = buffer_dir / f"{fk}.tar"
+        for attempt in range(1, 4):
+            r = subprocess.run(["curl", "-sSL", "-H", f"apikey:{key}", "-o", str(tar_path), url],
+                               capture_output=True, text=True)
+            if r.returncode == 0:
+                break
+            log(f"  버퍼 다운로드 실패 ({attempt}/3): {r.stderr.strip()[:160]}"); time.sleep(10 * attempt)
+        else:
+            return False
+        log(f"  버퍼 {tar_path.stat().st_size / 1e6:.0f}MB 확보 ({(time.time() - t_start) / 60:.1f}분) → 업로드 시작")
+        src = tar_path.open("rb")
+    else:
+        curl = subprocess.Popen(["curl", "-sSL", "-H", f"apikey:{key}", url],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        assert curl.stdout is not None
+        src = curl.stdout
     try:
-        with tarfile.open(fileobj=curl.stdout, mode="r|") as tar:
+        with tarfile.open(fileobj=src, mode="r|") as tar:
             for ti in tar:
                 if not ti.isreg():
                     continue
@@ -115,8 +135,10 @@ def stream_filekey(dataset: str, fk: str, dest: str, key: str, dry_run: bool) ->
                     assert rc.stdin is not None
                     try:
                         pump(f, ti.size, rc.stdin)
-                    finally:
-                        rc.stdin.close()
+                    except Exception:
+                        rc.kill(); rc.wait()
+                        raise
+                    # communicate() 가 stdin 을 닫아 EOF 를 보내고 stderr 를 회수한다 (먼저 닫으면 flush 오류)
                     _, err = rc.communicate()
                     got = rclone_size(remote)
                     if rc.returncode == 0 and got == ti.size:
@@ -130,10 +152,13 @@ def stream_filekey(dataset: str, fk: str, dest: str, key: str, dry_run: bool) ->
         ok = False
         log(f"  스트림 오류: {e}")
     finally:
-        curl.wait()
-        if curl.returncode not in (0, None):
-            ok = False
-            log(f"  curl 종료 코드 {curl.returncode}: {curl.stderr.read().decode(errors='replace').strip()[:200] if curl.stderr else ''}")
+        if curl is not None:
+            curl.wait()
+            if curl.returncode not in (0, None):
+                ok = False
+                log(f"  curl 종료 코드 {curl.returncode}: {curl.stderr.read().decode(errors='replace').strip()[:200] if curl.stderr else ''}")
+        if tar_path is not None:
+            src.close(); tar_path.unlink(missing_ok=True)
 
     parts.sort(key=lambda p: (p["base"], p["index"]))
     total = sum(p["size"] for p in parts)
@@ -151,11 +176,12 @@ def main() -> int:
     ap.add_argument("--filekey", nargs="+", required=True)
     ap.add_argument("--dest", default="gdrive:falldata/aihub", help="rclone 원격 경로")
     ap.add_argument("--dry-run", action="store_true", help="스트림을 읽어 구조만 출력하고 업로드하지 않는다")
+    ap.add_argument("--buffer-dir", type=Path, help="tar 를 이 디렉토리에 먼저 받은 뒤 업로드 (업로드가 느린 회선용, 디스크 필요)")
     args = ap.parse_args()
     key = api_key()
     ok = True
     for fk in args.filekey:
-        ok &= stream_filekey(args.dataset, fk, args.dest, key, args.dry_run)
+        ok &= stream_filekey(args.dataset, fk, args.dest, key, args.dry_run, args.buffer_dir)
     return 0 if ok else 1
 
 
