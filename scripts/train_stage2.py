@@ -239,9 +239,15 @@ def train_nn(kind, X, y, tr, va, te, names, fall_idx, args):
             return s.fc(o[:, -1])
 
     class STGCN(nn.Module):
-        """골격 구조를 인접행렬로 명시한다. 관절 간 연결이 학습에 반영된다."""
+        """골격 구조를 인접행렬로 명시한다. 관절 간 연결이 학습에 반영된다.
+
+        공간(그래프) 합성곱과 시간 합성곱을 번갈아 쌓는다. 한 층만 쓰고 시간축을
+        평균내면 시간 정보가 사라져 한 클래스로 붕괴한다 (합성 데이터에서 실측).
+        각 블록 뒤에 BatchNorm 을 둬 학습을 안정시킨다.
+        """
         E = [(0,1),(0,2),(1,3),(2,4),(0,5),(0,6),(5,6),(5,7),(7,9),(6,8),(8,10),
              (5,11),(6,12),(11,12),(11,13),(13,15),(12,14),(14,16)]
+
         def __init__(s):
             super().__init__()
             A = torch.eye(17)
@@ -249,16 +255,25 @@ def train_nn(kind, X, y, tr, va, te, names, fall_idx, args):
                 A[i, j] = A[j, i] = 1
             A = A / A.sum(1, keepdim=True)
             s.register_buffer("A", A)
-            s.g1, s.g2 = nn.Linear(3, 64), nn.Linear(64, 128)
-            s.t1 = nn.Conv1d(128 * 17, 128, 5, padding=2)
-            s.bn = nn.BatchNorm1d(128)
+            s.gc1, s.bn1 = nn.Linear(3, 64), nn.BatchNorm2d(64)
+            s.tc1 = nn.Conv2d(64, 64, (5, 1), padding=(2, 0))
+            s.gc2, s.bn2 = nn.Linear(64, 128), nn.BatchNorm2d(128)
+            s.tc2 = nn.Conv2d(128, 128, (5, 1), stride=(2, 1), padding=(2, 0))
+            s.bn3 = nn.BatchNorm2d(128)
             s.fc = nn.Sequential(nn.Dropout(0.3), nn.Linear(128, K))
+
+        def _blk(s, x, gc, bn, tc):
+            # x: (B,T,V,C) → 그래프 합성곱 → (B,C,T,V) 로 바꿔 시간 합성곱
+            h = torch.relu(gc(torch.einsum("ij,btjc->btic", s.A, x)))
+            h = h.permute(0, 3, 1, 2)            # (B,C,T,V)
+            h = torch.relu(bn(tc(h)))
+            return h.permute(0, 2, 3, 1)         # 다시 (B,T,V,C)
+
         def forward(s, x):                       # (B,T,17,3)
-            h = torch.relu(s.g1(torch.einsum("ij,btjc->btic", s.A, x)))
-            h = torch.relu(s.g2(torch.einsum("ij,btjc->btic", s.A, h)))
-            h = h.flatten(2).transpose(1, 2)     # (B, 128*17, T)
-            h = torch.relu(s.bn(s.t1(h)))
-            return s.fc(h.mean(-1))
+            h = s._blk(x, s.gc1, s.bn1, s.tc1)
+            h = s._blk(h, s.gc2, s.bn2, s.tc2)
+            h = s.bn3(h.permute(0, 3, 1, 2))     # (B,C,T,V)
+            return s.fc(h.mean((2, 3)))          # 시간·관절 평균
 
     m = {"cnn1d": CNN1D,
          "lstm": lambda: RNN(nn.LSTM),
