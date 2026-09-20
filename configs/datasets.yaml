@@ -226,7 +226,7 @@ transfer:
   colab_session: omnifall
   colab_disk_free_gb: 94              # 2026-09-20 확인. OCCU(11GB) + 해제분도 여유.
   drive_target: /content/drive/MyDrive/falldata/omnifall
-  drive_required_gb: 35               # zip 원본 30GB 보관 기준. 중복 제거한 클립만 보관하면 ~15GB. 기본 15GB Drive 로는 어느 쪽도 빠듯 → 400GB 확장 선행
+  drive_required_gb: 35               # zip 원본 30GB 보관 기준. Drive 는 5TB (nnn290199@gmail.com) 라 여유 있음
   prerequisite_user_action: "colab drivemount -s omnifall"   # TTY 필요, 사용자가 직접
   strategy:
     - "zip 하나씩: 다운로드 → MD5 검증 → Drive 로 복사 → /content 에서 삭제"
