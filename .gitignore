@@ -38,3 +38,10 @@ env/
 
 # AI Hub API Key
 .aihub_key
+
+# 키포인트 캐시 (영상당 4MB, 재생성 가능)
+runs/keypoints/
+*.npy
+
+# 가상환경
+venv_aihub/
