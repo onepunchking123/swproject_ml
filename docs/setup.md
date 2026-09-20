@@ -50,13 +50,38 @@ AttributeError: module 'jupyter_kernel_client' has no attribute 'KernelClient'
 압축 해제에 원본의 2~3배 용량이 필요하므로, **한 세션당 30~40GB 파트**가 상한이다.
 300GB 전체는 8~10회로 나눠 처리한다.
 
+## Colab 계정 — Drive 와 같은 계정이어야 한다
+
+**Colab 은 런타임 계정과 같은 계정의 Drive 만 마운트한다.** 2021년 11월부터의 제약이다
+([colabtools#2497](https://github.com/googlecolab/colabtools/issues/2497)). 마운트 화면에서
+다른 계정을 고르면 "Close this tab/window" 빈 화면만 뜨고 실패한다.
+
+따라서 **세션(컴퓨팅)·Drive·Colab Pro 결제가 전부 한 계정에 묶인다.** 본 프로젝트는
+400GB Drive 가 있는 계정을 Colab CLI 의 주 계정으로 쓴다 (2026-09-20 전환).
+
+### 계정 전환 절차
+
+토큰은 `~/.config/colab-cli/token.json` 하나다. 삭제하지 말고 이름을 바꿔 백업한다.
+
+```bash
+mv ~/.config/colab-cli/token.json ~/.config/colab-cli/token.school.json
+colab sessions          # 인증 URL → 원하는 계정으로 로그인 → 코드 붙여넣기
+colab whoami            # Email 이 바뀌었는지 확인
+```
+
+되돌리려면 파일 이름을 다시 바꾸면 된다. 학교 계정 토큰은 `token.school.json` 으로 남아 있다.
+
+전환 후에는 이전 계정의 세션이 CLI 에 보이지 않으므로, **전환 전에 `colab stop` 으로
+모두 종료**해야 유닛이 새지 않는다.
+
 ## 세션 운영
 
 ```bash
-colab new -s falldata              # CPU (탐색·전처리용)
+colab new -s omnifall              # CPU (공개 데이터셋 전송·전처리용)
+colab drivemount -s omnifall       # Drive 마운트 — 사용자가 직접, 세션마다 다시
 colab new -s train --gpu T4        # GPU (학습용)
-colab exec -s falldata -f x.py     # 로컬 스크립트를 VM에서 실행
-colab stop -s falldata             # 반드시 종료
+colab exec -s omnifall -f x.py     # 로컬 스크립트를 VM에서 실행
+colab stop -s omnifall             # 반드시 종료
 ```
 
 - **커널 상태는 `exec` 호출 간 유지된다.** 데이터를 한 번 로드해 두고 여러 번 분석할 수 있다.

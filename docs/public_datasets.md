@@ -85,7 +85,8 @@ Cauca_fall/
 ├── caucafall.csv                      # omnifall_v1 스키마, 258 구간
 ├── mmaction2_annotations.txt          # "Subject.1\HopS1_9_0.000_9.100_1_1_caucafall.avi 9"
 └── clips/Subject.{1..10}/
-    └── {Action}S{subj}_{label}_{start}_{end}_{subj}_{cam}_caucafall.avi   # 516개
+    ├── {Action}S{subj}_{label}_{start}_{end}_{subj}_{cam}_caucafall.avi              # 258개 (유지)
+    └── Subject.{subj}_{action}_01_{start}_{end}_{label}_{cam}_{subj}_caucafall.avi     # 258개 (동일 내용 중복, 삭제)
 ```
 
 파일명에 라벨·시작·끝·피험자·카메라가 전부 인코딩돼 있다.
@@ -99,8 +100,17 @@ Cauca_fall/
 Stage 2 학습에는 Zenodo 가 충분하다. 스트리밍 평가가 필요해지면 그때 원본 연속
 영상을 확보한다.
 
-**확인할 것**: caucafall.csv 는 258 구간인데 avi 는 516개로 정확히 2배다. 해제 후
-원인을 확인한다 (뷰 2개? train/val 중복? 라벨 분리?).
+**516 = 258 × 2 의 정체 (해결)**: 같은 클립이 두 가지 파일명 규칙으로 두 번 들어있다.
+zip 의 CRC 로 대조한 결과 258쌍 전부 바이트 단위로 동일한 순수 중복이다.
+
+```
+FallBackwardsS1_1_1.930_3.770_1_1_caucafall.avi             # 짧은 형식: {Action}S{subj}_{label}_{start}_{end}_{subj}_{cam}
+Subject.1_fall_backwards_01_1.930_3.770_1_1_1_caucafall.avi  # 긴 형식:  Subject.{subj}_{action}_01_{start}_{end}_{label}_{cam}_{subj}
+```
+
+`mmaction2_annotations.txt` 는 짧은 형식만 가리키므로 **짧은 형식을 남기고 긴 형식을
+지운다.** 해제 직후 삭제하면 디스크가 50% 절감된다. 8개 zip 모두 같은 구조라면 30.1GB 의
+실제 고유 콘텐츠는 약 15GB 다 — zip 마다 해제 시 검증한다.
 
 ### 알려진 함정 (KNOWN_PITFALLS.md)
 

@@ -25,6 +25,47 @@ FNF_LABEL = {"FALL": "낙상", "NonFall": "비낙상"}
 TYPE_LABEL = {"FY": "전면낙상", "BY": "후면낙상", "SY": "측면낙상", "N": "비낙상"}
 
 
+CHROME_PATHS = [
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+]
+
+
+def html_to_pdf(html_file: Path, pdf_file: Path) -> bool:
+    """Chrome headless 로 PDF 변환. 추가 설치가 필요 없다.
+
+    `--print-to-pdf` 는 file:// URL 을 받으므로 별도 서버가 필요 없고,
+    HTML 에 base64 로 내장된 이미지도 그대로 렌더링된다.
+    """
+    import shutil
+    import subprocess
+    import tempfile
+
+    browser = next((p for p in CHROME_PATHS if Path(p).exists()), None) \
+        or shutil.which("chromium") or shutil.which("google-chrome")
+    if not browser:
+        print("[!] Chrome 계열 브라우저를 찾지 못했습니다.")
+        return False
+
+    # 프로필 충돌을 피하려고 임시 디렉토리를 쓴다 (이미 Chrome 이 떠 있어도 동작)
+    with tempfile.TemporaryDirectory() as tmp:
+        cmd = [
+            browser, "--headless", "--disable-gpu", "--no-sandbox",
+            f"--user-data-dir={tmp}",
+            "--no-pdf-header-footer",
+            "--virtual-time-budget=20000",   # 이미지 렌더링 대기
+            f"--print-to-pdf={pdf_file}",
+            html_file.resolve().as_uri(),
+        ]
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    if pdf_file.exists() and pdf_file.stat().st_size > 1000:
+        return True
+    print("[!]", (r.stderr or r.stdout)[-500:])
+    return False
+
+
 def truth_of(r: dict, task: str) -> str:
     if task == "fnf":
         return "NonFall" if r["true"] == "N" else "FALL"
@@ -59,6 +100,7 @@ def main() -> int:
     ap.add_argument("--out", type=Path, default=Path("runs/report"))
     ap.add_argument("--frames", type=int, default=5, help="영상당 추출 프레임 수")
     ap.add_argument("--width", type=int, default=300, help="썸네일 가로 픽셀")
+    ap.add_argument("--pdf", action="store_true", help="HTML 과 함께 PDF 도 생성")
     args = ap.parse_args()
 
     res_f = args.results / f"{args.task}_results.json"
@@ -159,6 +201,25 @@ td.off {{ background:var(--bad-bg) }}
 .note {{ background:var(--card); border-left:3px solid var(--accent);
   padding:11px 15px; margin:14px 0; border-radius:0 8px 8px 0; font-size:14px }}
 @media (max-width:640px) {{ body {{ padding:16px 12px }} .stat {{ min-width:100px }} }}
+
+/* 인쇄 / PDF — 항상 라이트 테마로 고정하고 카드가 페이지에서 잘리지 않게 한다 */
+@media print {{
+  :root {{
+    --bg:#fff; --fg:#111; --muted:#555; --line:#ccc; --card:#f7f7f7;
+    --ok:#0a7d33; --ok-bg:#e8f6ec; --bad:#c62828; --bad-bg:#fdeaea; --accent:#1a4f8a;
+  }}
+  body {{ padding:0; font-size:11pt; background:#fff; color:#111 }}
+  .wrap {{ max-width:none }}
+  h1 {{ font-size:18pt }}
+  h2 {{ font-size:14pt; margin-top:18pt; page-break-after:avoid }}
+  h3 {{ font-size:12pt; page-break-after:avoid }}
+  .card, .stat, table, .note {{ page-break-inside:avoid; break-inside:avoid }}
+  .frames {{ overflow:visible }}
+  .frames img {{ max-width:{args.width}px }}
+  .stats {{ gap:6px }}
+  a[href]:after {{ content:"" }}
+}}
+@page {{ size:A4; margin:12mm 10mm }}
 </style></head><body><div class="wrap">""")
 
     P.append(f"<h1>AI Hub 공식 모델 베이스라인</h1>")
@@ -264,6 +325,14 @@ td.off {{ background:var(--bad-bg) }}
     out_f.write_text("".join(P), encoding="utf-8")
     size = out_f.stat().st_size / 1e6
     print(f"[*] 보고서 저장: {out_f}  ({size:.1f} MB)")
+
+    if args.pdf:
+        pdf_f = out_f.with_suffix(".pdf")
+        if html_to_pdf(out_f, pdf_f):
+            print(f"[*] PDF 저장: {pdf_f}  ({pdf_f.stat().st_size/1e6:.1f} MB)")
+        else:
+            print("[!] PDF 변환 실패 — 브라우저에서 HTML 을 열고 "
+                  "⌘P → 'PDF로 저장' 을 사용하세요.")
     return 0
 
 
