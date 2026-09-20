@@ -205,8 +205,24 @@ sources:
     images: 6982
     classes: {fallen: 5023, adl: 2275}
     elderly_images: 413             # 65세 이상 자원자
-    format: YOLO txt
-    download: SharePoint 직접 링크 (폼 없음). URL 은 페이지에서 확인
+    # 실제 라벨 형식 (2026-09-20 확인): "YOLO txt" 라 적혀 있지만 정규화 좌표가 아니다.
+    #   한 줄 = "class x_min x_max y_min y_max"  (픽셀 절대좌표, darknet BBox-Label-Tool 형식)
+    #   예: 640x480 이미지에 "1 173 562 367 472" → x 173~562, y 367~472 (누운 사람의 넓고 낮은 박스)
+    #   YOLO 변환: xc=(x_min+x_max)/2/W, yc=(y_min+y_max)/2/H, w=(x_max-x_min)/W, h=(y_max-y_min)/H
+    #   class 1 = fallen 으로 추정 (Info_splits 의 FallenPersons/NonFallenPersons 와 대조해 확정할 것)
+    format: "class x_min x_max y_min y_max (절대 픽셀) → YOLO 정규화 변환 필요"
+    image_format: png (해상도 혼재: 640x480, 1920x1080 급 등)
+    splits:                          # FPDS_info/Info_splits.txt
+      train: {splits: [split01, split02, split03, split10, split11], frames: 4808, fallen: 3867, nonfallen: 1005}
+      valid: {splits: [split12, split13], frames: 1201, fallen: 765, nonfallen: 440}
+      test:  {splits: [split04, split05, split06, split07, split08], frames: 973, fallen: 391, nonfallen: 830}
+    files:
+      - {name: train.tar.gz, status: "재다운로드 필요 — 1차 다운로드가 104MB 에서 잘림 (gzip EOF, png 248장만)"}
+      - {name: valid.tar.gz, size_bytes: 433222189, status: 정상 (png 1175 / txt 1201)}
+      - {name: test.tar.gz,  size_bytes: 373167151, status: 정상 (png 973 / txt 973)}
+      - {name: FPDS_info/,   status: "labels/ 1,201 txt + Info_splits.txt + 분할 스크립트"}
+    drive_dest: falldata/efpds
+    download: SharePoint 직접 링크 — curl 은 HTML 만 받으므로 **브라우저로 받아** rclone 으로 Drive 에 올린다
     license: 인용 필수 — Maldonado-Bascón et al., "Fallen People Detection Capabilities Using Assistive Robot", Electronics 2019
     fills_gap: "Stage 1 — COCO 사전학습 검출기가 약한 '누워 있는/쓰러진 사람' 자세"
 
