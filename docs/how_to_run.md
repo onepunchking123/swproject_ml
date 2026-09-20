@@ -212,3 +212,42 @@ cd ~/Documents/fall-detection && ./venv_aihub/bin/python scripts/aihub_infer.py 
 
 `--data` 경로에 공백이 있으면 **따옴표로 감싸야 한다.**
 `Sample 2`, `낙상사고 위험동작...` 모두 공백이 있다.
+
+## 7. 시각 보고서 만들기
+
+추론 결과를 영상 썸네일과 함께 HTML 로 정리한다. 어떤 장면에서 왜 틀렸는지
+눈으로 확인할 수 있다.
+
+```bash
+cd ~/Documents/fall-detection && ./venv_aihub/bin/python scripts/make_report.py --data "/Users/mymoon/Downloads/Sample 2/01.원천데이터/영상" --task fnf
+```
+
+```bash
+cd ~/Documents/fall-detection && ./venv_aihub/bin/python scripts/make_report.py --data "/Users/mymoon/Downloads/Sample 2/01.원천데이터/영상" --task fd
+```
+
+저장 위치: `runs/report/fnf_report.html`, `runs/report/fd_report.html`
+
+브라우저로 열기:
+
+```bash
+open ~/Documents/fall-detection/runs/report/fnf_report.html
+```
+
+### 보고서에 담기는 것
+
+- 정확도 · Recall · Precision · FPR · 놓친 낙상 수
+- Confusion matrix (대각선 초록, 오분류 빨강)
+- **카메라별 정확도** — 어느 각도가 취약한지
+- **영상별 카드** — 시간순 프레임 5장 + 실제/예측 라벨 + 클래스별 확률
+  - 오답은 빨간 테두리로 구분된다
+  - 같은 장면이 카메라별로 묶여 있어 판정이 갈리는 지점을 바로 볼 수 있다
+
+| 옵션 | 기본값 | 설명 |
+|---|---|---|
+| `--frames` | 5 | 영상당 추출할 프레임 수 |
+| `--width` | 300 | 썸네일 가로 픽셀 |
+| `--out` | `runs/report` | 저장 위치 |
+
+이미지는 base64 로 HTML 에 내장되므로 파일 하나만 옮기면 어디서든 열린다
+(FNF 약 2MB, FD 약 1.5MB).

@@ -1,0 +1,218 @@
+# 공개 낙상 데이터셋 레지스트리
+#
+# fetch 스크립트가 이 파일을 읽어 다운로드·MD5 검증·해제를 수행한다.
+# 모든 값은 2026-09-20 에 실제 API/페이지에서 확인한 것이다. 추측값은 "확인 필요" 로 표기.
+#
+# 라벨 스키마는 OmniFall 을 그대로 채택한다 (아래 schema 참고). 나중에 AI Hub 데이터도
+# 같은 컬럼으로 매핑해 넣으면 모든 모델이 하나의 로더로 돈다.
+
+schema:
+  name: omnifall_v1
+  columns: [path, label, start, end, subject, cam, dataset]
+  notes:
+    - path 는 dataset 상대경로이며 확장자 없음. 유일성은 (dataset, path) 쌍에서만 보장된다.
+    - start / end 는 초 단위 float. subject / cam 은 in-the-wild(OOPS) 와 synthetic 에서 -1.
+    - '연속 영상 해석: "{root}/{dataset}/video/{path}.mp4" (HF 공식 레이아웃)'
+    - Zenodo 배포판은 구간별로 미리 잘린 클립이라 레이아웃이 다르다. sources.omnifall_zenodo.layout 참고.
+
+# 16 클래스. staged 데이터셋은 0-9 만 사용, 10-15 는 OOPS/synthetic 에만 등장하며 9(other) 로 접어도 된다.
+label2id:
+  walk: 0
+  fall: 1          # 넘어지는 동작 자체 (관성 운동이 멎을 때까지)
+  fallen: 2        # 넘어진 뒤 바닥/매트리스에 있는 상태  ← "미동 없음" 판정의 기준 상태
+  sit_down: 3
+  sitting: 4
+  lie_down: 5      # 의도적으로 누움 (fall 과 대비)
+  lying: 6         # 의도적으로 누운 상태  ← fallen 과 반드시 구분해야 함
+  stand_up: 7      # 누움→앉음 전환도 포함
+  standing: 8
+  other: 9
+  kneel_down: 10
+  kneeling: 11
+  squat_down: 12
+  squatting: 13
+  crawl: 14
+  jump: 15
+
+# 본 프로젝트의 이진 낙상 판정용 축약. Stage 2 학습 시 이 매핑을 쓴다.
+label_groups:
+  fall_event: [1]                 # 낙상 발생
+  post_fall: [2]                  # 낙상 후 상태 (미동 판정 대상)
+  normal_rest: [4, 6, 8, 11, 13]  # 정상 정지 자세 — 미동이어도 정상
+  transition: [3, 5, 7, 10, 12]
+  locomotion: [0, 14, 15]
+  other: [9]
+
+sources:
+
+  # ───────────────────────────────────────────────────────────────────
+  # 1) OmniFall 통합 배포판 (영상 클립) — Zenodo
+  # ───────────────────────────────────────────────────────────────────
+  omnifall_zenodo:
+    doi: 10.5281/zenodo.17170592
+    record_api: https://zenodo.org/api/records/17170592
+    published: 2025-09-21
+    version: "1.0"
+    license_distribution: cc-by-4.0     # 배포판 표기. 각 원본의 라이선스가 우선한다 (아래 components).
+    total_gb: 30.1
+    geo_block: false                    # AI Hub 와 달리 Colab(해외 IP)에서 직접 다운로드 가능
+    layout: "{name}/clips/Subject.{subject}/{Action}S{subject}_{label}_{start}_{end}_{subject}_{cam}_{dataset}.avi"
+    per_dataset_files:
+      - "{name}/{dataset}.csv"             # omnifall_v1 스키마
+      - "{name}/mmaction2_annotations.txt" # "상대경로 라벨" 한 줄 형식 (Windows 역슬래시 주의)
+    verify_after_extract:
+      - CSV 구간 수와 avi 개수 대조 (Cauca 는 258 구간 / 516 avi 로 정확히 2배 — 원인 확인 필요)
+      - 파일명에 인코딩된 label 과 CSV label 일치 여부
+    # 다운로드 순서: 작은 것부터 → 파이프라인이 작은 파일로 먼저 검증된다
+    files:
+      - name: Cauca_fall.zip
+        dataset: caucafall
+        size_gb: 0.17
+        md5: 5a1899fe0022c9c4c0d37ce64ac0c986
+        url: https://zenodo.org/api/records/17170592/files/Cauca_fall.zip/content
+        subjects: 10
+        duration: 16m
+        license_original: 확인 필요 (Mendeley Data 배포, CC-BY 계열로 추정)
+        verified_locally: true         # 2026-09-20 맥북에서 받아 MD5·구조 확인
+      - name: EDF.zip
+        dataset: edf
+        size_gb: 0.99
+        md5: a45b3b84f329b00817db31634f92c6e1
+        url: https://zenodo.org/api/records/17170592/files/EDF.zip/content
+        subjects: 5
+        duration: 13m
+        license_original: 확인 필요 (연구 목적)
+        pitfall: 다중 카메라 — 일부 구간 end 가 영상 길이를 초과 (최대 7.36s). 로더에서 clip 처리.
+      - name: OOPS_1k.zip
+        dataset: OOPS
+        size_gb: 1.03
+        md5: 52ccdcfaf8832a8845ec6a070b8bd917
+        url: https://zenodo.org/api/records/17170592/files/OOPS_1k.zip/content
+        subjects: -1
+        duration: 실제 사고 영상 큐레이션 (in-the-wild)
+        license_original: 확인 필요 (YouTube 유래, 연구 목적)
+        role: test_only               # 연출 데이터로 학습 → 실제 사고로 평가 (일반화 지표)
+      - name: GMDCSA24.zip
+        dataset: GMDCSA24
+        size_gb: 1.67
+        md5: 920bfdda892244c4d9f3c405bce41267
+        url: https://zenodo.org/api/records/17170592/files/GMDCSA24.zip/content
+        subjects: 4
+        duration: 21m
+        license_original: MIT          # 상업 이용 가능 — 서비스 모델 학습에 쓸 수 있는 유일한 공개셋
+        origin: https://github.com/ekramalam/GMDCSA24-A-Dataset-for-Human-Fall-Detection-in-Videos
+      - name: MCFD.zip
+        dataset: mcfd
+        size_gb: 2.80
+        md5: b365b5a4b16691fce3fc09ccd554df79
+        url: https://zenodo.org/api/records/17170592/files/MCFD.zip/content
+        subjects: 1
+        duration: 12m
+        cams: 8
+        license_original: 확인 필요 (Université de Montréal, 연구 목적)
+        pitfall: 다중 카메라 — 85/1352 구간이 영상 끝을 초과 (최대 1.19s)
+      - name: UP_Fall.zip
+        dataset: up_fall
+        size_gb: 3.18
+        md5: baa972b1d215e04c18574f3a647ebf01
+        url: https://zenodo.org/api/records/17170592/files/UP_Fall.zip/content
+        subjects: 17
+        duration: 4h35m                # staged 중 최대
+        license_original: 확인 필요 (저자 허가 기반 배포)
+        origin: https://sites.google.com/up.edu.mx/har-up/
+      - name: LE2I.zip
+        dataset: le2i
+        size_gb: 9.07
+        md5: 21986336fd68b5b60d973237b83d2d67
+        url: https://zenodo.org/api/records/17170592/files/LE2I.zip/content
+        subjects: 9
+        duration: 47m
+        environments: [Home_01, Home_02, Coffee_room_01, Coffee_room_02, Lecture_room, Office]
+        license_original: CC-BY-NC-SA-3.0   # 비상업 — 논문 전용
+        origin: https://search-data.ubfc.fr/imvia/FR-13002091000019-2024-04-09_Fall-Detection-Dataset.html
+      - name: OCCU.zip
+        dataset: occu
+        size_gb: 11.15
+        md5: af66c070a28d110c5148be69d4b79afa
+        url: https://zenodo.org/api/records/17170592/files/OCCU.zip/content
+        subjects: 5
+        duration: 14m
+        note: 가림(occlusion) 상황 — 가구 뒤 낙상 등. 실환경 강건성 평가에 유용.
+        license_original: 확인 필요 (연구 목적)
+
+  # ───────────────────────────────────────────────────────────────────
+  # 2) OmniFall 어노테이션·split — Hugging Face (gated 아님, 토큰 불필요)
+  # ───────────────────────────────────────────────────────────────────
+  omnifall_hf:
+    repo: simplexsigil2/omnifall
+    api: https://huggingface.co/api/datasets/simplexsigil2/omnifall
+    resolve_base: https://huggingface.co/datasets/simplexsigil2/omnifall/resolve/main
+    license_annotations: cc-by-nc-4.0   # 어노테이션·split 정의. 비상업.
+    gated: false
+    last_modified: 2026-08-27
+    docs: [README.md, LABELS.md, STRUCTURE.md, KNOWN_PITFALLS.md, CONFIGS.md]
+    labels_dir: labels/                 # caucafall.csv, le2i.csv, up_fall.csv, mcfd.csv, edf.csv, occu.csv, GMDCSA24.csv, OOPS.csv, cmdfall.csv, of-syn.csv, label2id.csv
+    splits_dir: splits/                 # cs/ (cross-subject), cv/ (cross-view), syn/
+    configs_of_interest:
+      - of-sta-cs            # staged 8종, cross-subject — 기본 학습/평가
+      - of-sta-cv            # cross-view — 카메라 위치 독립성 검증 (본 연구 핵심 주장)
+      - of-sta-to-all-cs     # staged 학습 → in-the-wild 포함 전체 테스트
+    pip: omnifall            # pip install omnifall ; omnifall.load("of-sta-cs", split="test")
+    extras_not_in_zenodo:
+      - cmdfall (384 연속 영상, 7 Kinect 뷰) — Zenodo 배포판에 없음. 원본 별도 확보 필요.
+      - of-syn (합성 12,000편, 9.1GB AV1) — data_files/omnifall-synthetic_av1.tar 로 HF 에서 직접.
+
+  # ───────────────────────────────────────────────────────────────────
+  # 3) URFD — 공식 사이트 직접 (wget 가능), Colab 에서 다운로드 가능
+  # ───────────────────────────────────────────────────────────────────
+  urfd:
+    page: https://fenix.ur.edu.pl/~mkepski/ds/uf.html
+    license: CC-BY-NC-SA-4.0            # 비상업 — 논문 전용
+    citation_required: Kwolek & Kepski (2014), Comput Methods Programs Biomed 117(3)
+    sequences: {fall: 30, adl: 40}
+    cams: {fall: [cam0, cam1], adl: [cam0]}
+    url_pattern: "https://fenix.ur.edu.pl/~mkepski/ds/data/{type}-{nn:02d}-{cam}-{modality}.zip"
+    modalities: {rgb: rgb, depth: d}    # 가속도: {type}-{nn}-acc.csv , 동기화: {type}-{nn}-data.csv
+    format_note: zip 안은 PNG 프레임 시퀀스 (영상 파일이 아님) — 프레임→클립 변환 필요
+    role: 교차 평가 + depth/가속도 멀티모달 확장 여지
+
+  # ───────────────────────────────────────────────────────────────────
+  # 4) Stage 1 바운딩박스 (YOLO 포맷) — Roboflow Universe
+  # ───────────────────────────────────────────────────────────────────
+  roboflow_bbox:
+    note: 사람 검출용 bbox. 개별 프로젝트마다 라이선스가 다르므로 다운로드 전 페이지에서 확인.
+    download_requires: Roboflow 계정 API 키 (사용자 발급)
+    candidates:
+      - url: https://universe.roboflow.com/roboflow-universe-projects/fall-detection-ca3o8/dataset/4
+        note: v4 resized640_aug3x. YOLOv8/v5 TXT+YAML 제공
+      - url: https://universe.roboflow.com/yolo-gs4dj/fall-detection-ca3o8-x7ajp
+        images: 4497
+      - url: https://universe.roboflow.com/yolo-h6urw/falling-zvpqk
+        images: 4132
+        classes: [down, bending, up]
+      - url: https://universe.roboflow.com/elderly-fall-detection/fall-detection-wvbiq/dataset/1
+        note: YOLOv11 포맷 제공
+
+# ─────────────────────────────────────────────────────────────────────
+# 용도별 사용 가능 범위 (라이선스 기준)
+# ─────────────────────────────────────────────────────────────────────
+usage_policy:
+  paper_experiments: [caucafall, edf, OOPS, GMDCSA24, mcfd, up_fall, le2i, occu, urfd]
+  service_model_training:              # 서비스에 올리는 최종 모델
+    allowed: [GMDCSA24]                # MIT
+    primary: AI Hub 71641              # 국내 활용 조건은 이용약관에서 별도 확인
+    forbidden: [le2i, urfd]            # CC-BY-NC — 상업 이용 불가
+    pending_license_check: [caucafall, edf, OOPS, mcfd, up_fall, occu]
+
+# ─────────────────────────────────────────────────────────────────────
+# 전송 계획 (Colab CPU 세션 → Google Drive)
+# ─────────────────────────────────────────────────────────────────────
+transfer:
+  colab_session: omnifall
+  colab_disk_free_gb: 94              # 2026-09-20 확인. OCCU(11GB) + 해제분도 여유.
+  drive_target: /content/drive/MyDrive/falldata/omnifall
+  drive_required_gb: 35               # zip 30GB + 여유. 기본 15GB Drive 로는 불가 → 400GB 확장 선행
+  prerequisite_user_action: "colab drivemount -s omnifall"   # TTY 필요, 사용자가 직접
+  strategy:
+    - "zip 하나씩: 다운로드 → MD5 검증 → Drive 로 복사 → /content 에서 삭제"
+    - 해제는 학습 세션에서 Drive→/content 로 zip 복사 후 수행 (Drive FUSE 위에서 직접 해제하지 않음)

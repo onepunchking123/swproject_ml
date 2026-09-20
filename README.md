@@ -64,13 +64,21 @@ YOLO는 단일 프레임 검출기지만, 감지하려는 두 이벤트는 모�
 **같은 데이터셋에 대한 공식 베이스라인**이므로 비교 대상으로 삼는다.
 상세 분석은 [docs/aihub_baseline.md](docs/aihub_baseline.md).
 
-### 공개 데이터셋 (교차 평가용)
+### 공개 데이터셋 — OmniFall 통합본 (주력 공개 데이터)
 
-- **Le2i** — 143 낙상 + 79 ADL, 4개 환경
-- **URFD** — 30 낙상 + 40 비낙상, RGB+depth+skeleton+IMU
-- **UP-Fall** — 17명 × 11 행동, RGB+적외선+관성
+8개 공개 낙상 데이터셋(Le2i, UP-Fall, GMDCSA24, CAUCAFall, MCFD, EDF, OCCU,
+OOPS 실제 사고 영상)을 **하나의 16클래스 시간 구간 라벨**로 다시 붙인 배포판.
+30.1GB, Zenodo. AI Hub 와 달리 지역 차단이 없어 Colab 에서 직접 받는다.
 
-AI Hub 학습 → 공개셋 테스트로 일반화 성능을 측정한다.
+`fall`(넘어짐) / `fallen`(넘어진 상태) / `lying`(정상적으로 누운 상태) 가 구분되어
+있어 **"미동 없음" 판정의 기준 상태**를 그대로 제공한다. 이 라벨 스키마를 프로젝트의
+통합 manifest 형식으로 채택한다.
+
+조사 결과와 라이선스 구분은 [docs/public_datasets.md](docs/public_datasets.md),
+레지스트리는 [configs/datasets.yaml](configs/datasets.yaml).
+
+**라이선스 주의**: Le2i·URFD 는 CC-BY-NC(비상업). 논문 실험에는 쓰되 **서비스에
+올리는 모델은 AI Hub 데이터(+MIT 인 GMDCSA24)로 학습**한다.
 
 ## 실험 설계
 
