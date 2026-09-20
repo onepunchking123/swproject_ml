@@ -60,10 +60,32 @@ AI 허브는 해외에서의 데이터 다운로드를 제한하고 있습니다
 
 | 자원 | 상태 |
 |---|---|
-| 맥북 M3 16GB | SSD 여유 **18GB** — 라벨은 가능, 이미지는 불가 |
+| 맥북 M3 16GB | SSD 여유 **3.5GB** (다른 세션 산출물·샘플·도커 이미지로 감소) — 스트리밍 외 불가 |
 | Colab CLI | 인증 완료. CPU VM 디스크 94GB, RAM 14GB, 2코어 |
 | Google Drive | 학생 계정 400GB 신청 예정 |
 | AI Hub API Key | 발급 완료, `~/.aihub_key` 에 저장 |
+
+## AI Hub → Drive 스트리밍 (2026-09-20 실측으로 확정된 경로)
+
+맥북(한국 IP)이 **디스크에 쓰지 않고** 중계한다: `scripts/aihub_stream.py`.
+
+```
+curl (AI Hub tar 스트림) → tarfile 스트림 파서 → 멤버(.partN)마다 rclone rcat → Drive
+```
+
+실측으로 확인된 제약:
+
+| 항목 | 결과 | 의미 |
+|---|---|---|
+| 다운로드 응답 | `302 → stream.aihub.or.kr/shellStream.do?uuid=…`, tar 즉석 생성, `Content-Length`·`Accept-Ranges` 없음 | **Range·이어받기·병렬 분할 불가.** 한 filekey 는 한 스트림으로 처음부터 끝까지 |
+| 연결당 속도 | 2.2MB/s (126MB 60초 평균) | VS.zip 55GB ≈ **7시간**, 중단 시 재시작 |
+| 동시 2스트림 | 각 2.3 / 1.7MB/s | 제한은 연결당 — filekey 가 여럿(TS 5개)이면 병렬 유효 |
+| 이 회선 원시 대역폭 | 국내 미러 3.3MB/s | **병목은 AI Hub 가 아니라 이 네트워크.** 빠른 회선(학교)에서는 크게 단축될 가능성 |
+| 맥북 여유 디스크 | 3.5GB | 스트리밍이 필수 |
+
+조각이 완료될 때마다 Drive 에 남으므로 도중에 끊겨도 업로드는 재사용된다 (다운로드는 다시).
+Drive 400GB 기준 OmniFall 30 + VS 55 = 85GB 는 들어가지만 **TS 436GB 는 들어가지 않는다** —
+Training 원천은 GCS 버킷(서울) 또는 교내 서버가 필요하다.
 
 ## 왜 Drive 400GB 만으로는 부족한가
 
