@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
 # AI Hub → Drive 병렬 스트리밍
 #
-# aihub_stream.py 는 filekey 를 순차 처리한다. AI Hub 는 연결당 속도를 제한하므로
-# (실측 2.2MB/s), filekey 가 여럿이면 프로세스를 나눠 동시에 받는 편이 빠르다.
-# 동시 2스트림 실측: 각 2.3 / 1.7MB/s — 합산 4.0MB/s 로 단일 대비 1.8배.
+# aihub_stream.py 를 filekey 마다 별도 프로세스로 띄운다.
+#
+# 반드시 --buffer-dir 로 돈다. 직접 스트리밍(파이프)은 업로드가 다운로드보다 느릴 때
+# 파이프가 막혀 AI Hub 서버가 연결을 끊는다 — 2026-09-20 실측:
+#
+#   스트리밍  0.5MB/s → curl (18) transfer closed        실패
+#   버퍼      3.1MB/s → TL 126MB 를 0.7분에 완료          성공
+#
+# 버퍼는 tar 를 디스크에 먼저 받고(서버 속도), 업로드는 그 뒤에 따로 한다.
+# 디스크를 파일 크기만큼 쓰지만 업로드 후 자동 삭제된다.
 #
 # 단, 한 filekey 는 쪼갤 수 없다 (Range·이어받기 불가). VS.zip 처럼 단일 파일은
 # 병렬화해도 이득이 없고, TS 5개 파트처럼 filekey 가 여럿일 때만 유효하다.
@@ -41,15 +48,27 @@ if ! rclone lsd gdrive: >/dev/null 2>&1; then
 fi
 
 mkdir -p runs/stream
+BUF=${BUFFER_DIR:-runs/buf}
+mkdir -p "$BUF"
 PY=./venv_aihub/bin/python
 [ -x "$PY" ] || PY=python3
+
+# 버퍼 모드는 tar 크기만큼 디스크를 쓴다. 동시 실행분을 합산해 확인한다.
+free_gb=$(df -g . | awk 'NR==2{print $4}')
+echo "[*] 디스크 여유 ${free_gb}GB · 버퍼 $BUF"
+if [ "$free_gb" -lt 5 ]; then
+    echo "[!] 디스크 여유가 ${free_gb}GB 뿐입니다. 버퍼 모드에는 받을 파일 크기만큼 필요합니다."
+    exit 1
+fi
 
 pids=()
 for fk in "$@"; do
     log="runs/stream/${fk}.log"
     echo "[*] filekey $fk 시작 → $log"
+    # --buffer-dir 필수: 업로드가 다운로드보다 느리면 파이프가 막혀 AI Hub 가 연결을 끊는다.
+    #   실측 — 스트리밍 0.5MB/s 실패 / 버퍼 3.1MB/s 성공 (6배)
     # caffeinate: 긴 작업 중 맥북이 잠들면 연결이 끊긴다
-    caffeinate -i "$PY" scripts/aihub_stream.py --filekey "$fk" > "$log" 2>&1 &
+    caffeinate -i "$PY" scripts/aihub_stream.py --filekey "$fk" --buffer-dir "$BUF" > "$log" 2>&1 &
     pids+=($!)
     sleep 2   # 동시 시작 시 서버가 거절하는 경우가 있어 간격을 둔다
 done
