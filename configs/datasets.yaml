@@ -178,6 +178,50 @@ sources:
       - of-syn (합성 12,000편, 9.1GB AV1) — data_files/omnifall-synthetic_av1.tar 로 HF 에서 직접.
 
   # ───────────────────────────────────────────────────────────────────
+  # 2b) OmniFall 합성(OF-Syn) — Hugging Face 직접. 노년 그룹 + 카메라 고도·방위 라벨
+  # ───────────────────────────────────────────────────────────────────
+  omnifall_syn:
+    file: data_files/omnifall-synthetic_av1.tar
+    url: https://huggingface.co/datasets/simplexsigil2/omnifall/resolve/main/data_files/omnifall-synthetic_av1.tar
+    size_bytes: 9720000000          # HF API LFS 메타 9.72GB (정확값은 다운로드 시 Content-Length 로 대조)
+    videos: 12000                   # 12,000 AV1 mp4. split: train 15,344 / val 1,956 / test 1,928 구간
+    codec: av1                      # OpenCV 가 못 읽을 수 있다 → ffmpeg 로 h264 트랜스코딩 후 사용
+    labels: labels/of-syn.csv       # 7 core + 12 인구통계·카메라 컬럼 (age_group, camera_elevation, camera_azimuth ...)
+    framewise: data_files/syn_frame_wise_labels.tar.zst
+    license: cc-by-nc-4.0
+    geo_block: false
+    fills_gap:
+      - "노년: age_group=elderly_65_plus (staged 데이터셋에는 거의 없음)"
+      - "카메라 독립성: camera_elevation {eye,low,high,top} × azimuth {front,rear,left,right} 라벨로 통제 실험 가능"
+    role: 학습 보조 + 카메라 위치 ablation. 합성이므로 실측 성능 주장에는 쓰지 않는다
+
+  # ───────────────────────────────────────────────────────────────────
+  # 2c) E-FPDS — 쓰러진 사람 BBOX 이미지 (Stage 1). UAH GRAM, SharePoint 직접 링크
+  # ───────────────────────────────────────────────────────────────────
+  efpds:
+    page: https://gram.web.uah.es/data/datasets/fpds/index.html
+    images: 6982
+    classes: {fallen: 5023, adl: 2275}
+    elderly_images: 413             # 65세 이상 자원자
+    format: YOLO txt
+    download: SharePoint 직접 링크 (폼 없음). URL 은 페이지에서 확인
+    license: 인용 필수 — Maldonado-Bascón et al., "Fallen People Detection Capabilities Using Assistive Robot", Electronics 2019
+    fills_gap: "Stage 1 — COCO 사전학습 검출기가 약한 '누워 있는/쓰러진 사람' 자세"
+
+  # ───────────────────────────────────────────────────────────────────
+  # 2d) 요청이 필요한 데이터셋 (사용자가 직접 신청)
+  # ───────────────────────────────────────────────────────────────────
+  request_required:
+    cmdfall:
+      page: https://www.mica.edu.vn/perso/Tran-Thi-Thanh-Hai/CMDFALL.html
+      how: 저자 이메일 요청 (연구 목적 무료)
+      why: 50명 × 20 동작, 7 Kinect 뷰 **연속 녹화** 384편 — OmniFall 이 이미 라벨링했지만 Zenodo 배포판에 영상이 없다. 스트리밍 평가·미동 판정에 필요
+    toyota_smarthome:
+      page: https://project.inria.fr/toyotasmarthome/
+      how: 라이선스 폼 (학술 연구 전용)
+      why: 60–80세 노인 18명의 실제 일상(7 Kinect, RGB+D). 낙상은 없지만 **오래 앉음·누움 등 정상 정지 구간**이 풍부 — 미동 판정의 음성(정상) 샘플
+
+  # ───────────────────────────────────────────────────────────────────
   # 3) URFD — 공식 사이트 직접 (wget 가능), Colab 에서 다운로드 가능
   # ───────────────────────────────────────────────────────────────────
   urfd:

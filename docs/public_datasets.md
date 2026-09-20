@@ -128,6 +128,24 @@ Subject.1_fall_backwards_01_1.930_3.770_1_1_1_caucafall.avi  # 긴 형식:  Subj
 카메라별 모델 8개인 것과 직접 대비된다. `of-sta-to-all-cs` 는 연출 데이터로 학습해
 실제 사고(OOPS)까지 평가하는 일반화 지표.
 
+## 2차 수집 — 현재 확보분의 빈 곳을 채우는 후보 (2026-09-20 조사)
+
+OmniFall staged 8종의 약점 세 가지를 겨냥한다: 배우가 대부분 젊음, Stage 1 BBOX 없음,
+미동 판정용 긴 정상 정지 구간 없음.
+
+| 후보 | 채우는 빈 곳 | 크기 | 입수 경로 | 라이선스 |
+|---|---|---|---|---|
+| **OF-Syn** (OmniFall 합성 12,000편) | 노년(65+) 그룹, **카메라 고도·방위 라벨** | 9.72GB (AV1 tar) | HF 직접 — Colab 고속 | CC-BY-NC-4.0 |
+| **E-FPDS** | Stage 1 **쓰러진 사람 BBOX** 6,982장 (노년 413장), YOLO 포맷 | 미확인 | SharePoint 직접 링크 | 인용 필수 |
+| **URFD** | 연속 시퀀스, RGB+depth+가속도 | 수 GB | wget 직접 | CC-BY-NC-SA-4.0 |
+| CMDFall | **연속 다중뷰 384편** — OmniFall 라벨은 있고 영상만 없음 | 대용량 | 저자 이메일 요청 | 연구용 |
+| Toyota Smarthome | **60–80세 노인 ADL**, 긴 정지 구간 (미동 음성 샘플) | 대용량 | 라이선스 폼 | 연구용 |
+
+OF-Syn 은 합성이라 **실측 성능 주장의 근거로는 쓰지 않는다.** 대신 카메라 위치를 통제한
+ablation(같은 낙상을 eye/low/high/top × front/rear/left/right 로 본 결과)에 쓴다 — AI Hub
+베이스라인의 카메라 의존성과 대비되는 본 연구의 핵심 주장을 검증하는 데 맞는 도구다.
+AV1 코덱이라 OpenCV 가 못 읽을 수 있어 ffmpeg 로 h264 트랜스코딩이 필요하다.
+
 ## 그 외
 
 ### URFD
