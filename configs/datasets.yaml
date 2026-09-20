@@ -231,3 +231,4 @@ transfer:
   strategy:
     - "zip 하나씩: 다운로드 → MD5 검증 → Drive 로 복사 → /content 에서 삭제"
     - 해제는 학습 세션에서 Drive→/content 로 zip 복사 후 수행 (Drive FUSE 위에서 직접 해제하지 않음)
+    - 해제·중복 제거·manifest 생성은 scripts/prepare_omnifall.py (긴 형식 중복은 추출 자체를 건너뜀)

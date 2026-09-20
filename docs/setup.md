@@ -102,6 +102,33 @@ urllib.request.urlopen(urllib.request.Request(
     headers={"Metadata-Flavor": "Google"})).status   # 200
 ```
 
+## 학습 세션에서 OmniFall 데이터 준비
+
+Drive 에는 zip 원본(30GB)만 둔다. 학습 세션마다 로컬 디스크로 풀어서 쓴다 —
+Drive FUSE 위에서 직접 해제하거나 수천 개 클립을 읽으면 매우 느리다.
+
+```bash
+colab new -s train --gpu T4
+colab drivemount -s train            # 사용자가 직접 (세션마다)
+colab upload -s train scripts/prepare_omnifall.py /content/prepare_omnifall.py
+echo 'import subprocess; subprocess.run("python /content/prepare_omnifall.py --zips /content/drive/MyDrive/falldata/omnifall --out /content/omnifall --staging /content/zips", shell=True)' \
+  | colab exec -s train --timeout 3600
+```
+
+결과: `/content/omnifall/<데이터셋>/clips/...` 와 `/content/omnifall/manifest.csv`
+(컬럼 `dataset,clip,path,label,start,end,subject,cam,source_zip`).
+
+- 긴 형식 중복 클립은 추출하지 않으므로 디스크는 zip 합계의 약 절반이다.
+- 각 zip 의 라벨 CSV 와 행 수·라벨 분포를 대조하며, 불일치가 있으면 종료 코드 1 과 ⚠ 표시.
+- `--only Cauca_fall.zip` 처럼 일부만 풀어 파이프라인을 먼저 검증할 수 있다.
+
+### Zenodo → Colab 전송 속도 (실측 2026-09-20)
+
+`scripts/fetch_omnifall.py` 단일 연결: 시작 1MB/s → 수십 초 뒤 2~3MB/s (TCP 램프업).
+30GB 기준 약 3시간. `colab exec --timeout 21600` 으로 클라이언트 타임아웃을 넉넉히 잡고
+`nohup` 으로 분리해 로그 파일에 기록한다. 커널이 이 셀을 실행하는 동안 같은 세션의
+`exec` 는 대기열에 걸리므로, 병행 작업은 `colab console`(별도 셸)로 한다.
+
 ## 세션 운영
 
 ```bash
