@@ -75,6 +75,7 @@ sources:
       - name: Cauca_fall.zip
         dataset: caucafall
         size_gb: 0.17
+        size_bytes: 173504611
         md5: 5a1899fe0022c9c4c0d37ce64ac0c986
         url: https://zenodo.org/api/records/17170592/files/Cauca_fall.zip/content
         subjects: 10
@@ -84,6 +85,7 @@ sources:
       - name: EDF.zip
         dataset: edf
         size_gb: 0.99
+        size_bytes: 991221216
         md5: a45b3b84f329b00817db31634f92c6e1
         url: https://zenodo.org/api/records/17170592/files/EDF.zip/content
         subjects: 5
@@ -93,6 +95,7 @@ sources:
       - name: OOPS_1k.zip
         dataset: OOPS
         size_gb: 1.03
+        size_bytes: 1025661867
         md5: 52ccdcfaf8832a8845ec6a070b8bd917
         url: https://zenodo.org/api/records/17170592/files/OOPS_1k.zip/content
         subjects: -1
@@ -102,6 +105,7 @@ sources:
       - name: GMDCSA24.zip
         dataset: GMDCSA24
         size_gb: 1.67
+        size_bytes: 1671761923
         md5: 920bfdda892244c4d9f3c405bce41267
         url: https://zenodo.org/api/records/17170592/files/GMDCSA24.zip/content
         subjects: 4
@@ -111,6 +115,7 @@ sources:
       - name: MCFD.zip
         dataset: mcfd
         size_gb: 2.80
+        size_bytes: 2803136235
         md5: b365b5a4b16691fce3fc09ccd554df79
         url: https://zenodo.org/api/records/17170592/files/MCFD.zip/content
         subjects: 1
@@ -121,6 +126,7 @@ sources:
       - name: UP_Fall.zip
         dataset: up_fall
         size_gb: 3.18
+        size_bytes: 3177158271
         md5: baa972b1d215e04c18574f3a647ebf01
         url: https://zenodo.org/api/records/17170592/files/UP_Fall.zip/content
         subjects: 17
@@ -130,6 +136,7 @@ sources:
       - name: LE2I.zip
         dataset: le2i
         size_gb: 9.07
+        size_bytes: 9065707715
         md5: 21986336fd68b5b60d973237b83d2d67
         url: https://zenodo.org/api/records/17170592/files/LE2I.zip/content
         subjects: 9
@@ -140,6 +147,7 @@ sources:
       - name: OCCU.zip
         dataset: occu
         size_gb: 11.15
+        size_bytes: 11147744147
         md5: af66c070a28d110c5148be69d4b79afa
         url: https://zenodo.org/api/records/17170592/files/OCCU.zip/content
         subjects: 5

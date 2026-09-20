@@ -34,11 +34,22 @@ CHROME_PATHS = [
 
 
 def html_to_pdf(html_file: Path, pdf_file: Path) -> bool:
-    """Chrome headless 로 PDF 변환. 추가 설치가 필요 없다.
+    """HTML → PDF 변환.
 
-    `--print-to-pdf` 는 file:// URL 을 받으므로 별도 서버가 필요 없고,
-    HTML 에 base64 로 내장된 이미지도 그대로 렌더링된다.
+    weasyprint 를 우선 쓴다. 순수 Python 이라 빠르고 안정적이다.
+    Chrome headless 는 base64 이미지가 수백 장 들어간 큰 HTML 에서
+    렌더링이 끝나지 않는 경우가 있어 보조 경로로만 둔다.
     """
+    try:
+        from weasyprint import HTML
+        HTML(filename=str(html_file)).write_pdf(str(pdf_file))
+        return pdf_file.exists() and pdf_file.stat().st_size > 1000
+    except ImportError:
+        pass
+    except Exception as e:
+        print(f"[!] weasyprint 실패: {type(e).__name__}: {e}")
+
+    # 보조 경로 — Chrome headless
     import shutil
     import subprocess
     import tempfile
@@ -46,24 +57,18 @@ def html_to_pdf(html_file: Path, pdf_file: Path) -> bool:
     browser = next((p for p in CHROME_PATHS if Path(p).exists()), None) \
         or shutil.which("chromium") or shutil.which("google-chrome")
     if not browser:
-        print("[!] Chrome 계열 브라우저를 찾지 못했습니다.")
         return False
-
-    # 프로필 충돌을 피하려고 임시 디렉토리를 쓴다 (이미 Chrome 이 떠 있어도 동작)
-    with tempfile.TemporaryDirectory() as tmp:
-        cmd = [
-            browser, "--headless", "--disable-gpu", "--no-sandbox",
-            f"--user-data-dir={tmp}",
-            "--no-pdf-header-footer",
-            "--virtual-time-budget=20000",   # 이미지 렌더링 대기
-            f"--print-to-pdf={pdf_file}",
-            html_file.resolve().as_uri(),
-        ]
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-    if pdf_file.exists() and pdf_file.stat().st_size > 1000:
-        return True
-    print("[!]", (r.stderr or r.stdout)[-500:])
-    return False
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            subprocess.run([
+                browser, "--headless", "--disable-gpu", "--no-sandbox",
+                f"--user-data-dir={tmp}", "--no-pdf-header-footer",
+                f"--print-to-pdf={pdf_file}", html_file.resolve().as_uri(),
+            ], capture_output=True, text=True, timeout=600)
+    except subprocess.TimeoutExpired:
+        print("[!] Chrome 변환 시간 초과")
+        return False
+    return pdf_file.exists() and pdf_file.stat().st_size > 1000
 
 
 def truth_of(r: dict, task: str) -> str:
@@ -214,8 +219,10 @@ td.off {{ background:var(--bad-bg) }}
   h2 {{ font-size:14pt; margin-top:18pt; page-break-after:avoid }}
   h3 {{ font-size:12pt; page-break-after:avoid }}
   .card, .stat, table, .note {{ page-break-inside:avoid; break-inside:avoid }}
-  .frames {{ overflow:visible }}
-  .frames img {{ max-width:{args.width}px }}
+  /* 가로 스크롤은 인쇄에서 잘리므로 균등 분할해 한 줄에 모두 넣는다 */
+  .frames {{ overflow:visible; display:flex }}
+  .frames figure {{ flex:1 1 0; min-width:0 }}
+  .frames img {{ width:100%; height:auto }}
   .stats {{ gap:6px }}
   a[href]:after {{ content:"" }}
 }}

@@ -251,3 +251,41 @@ open ~/Documents/fall-detection/runs/report/fnf_report.html
 
 이미지는 base64 로 HTML 에 내장되므로 파일 하나만 옮기면 어디서든 열린다
 (FNF 약 2MB, FD 약 1.5MB).
+
+### PDF 로 뽑기
+
+`--pdf` 를 붙이면 HTML 과 함께 PDF 도 만든다.
+
+```bash
+cd ~/Documents/fall-detection && ./venv_aihub/bin/python scripts/make_report.py --data "/Users/mymoon/Downloads/Sample 2/01.원천데이터/영상" --task fnf --pdf
+```
+
+저장 위치: `runs/report/fnf_report.pdf` (A4, 약 1.5MB, 12페이지)
+
+처음 한 번만 변환 라이브러리를 설치한다.
+
+```bash
+uv pip install --python venv_aihub/bin/python weasyprint
+```
+
+**weasyprint 를 쓰는 이유.** Chrome headless(`--print-to-pdf`)도 가능하지만,
+base64 이미지가 160장 들어간 2MB HTML 에서 렌더링이 5분을 넘겨도 끝나지 않았다.
+weasyprint 는 같은 작업을 23초에 끝낸다. 스크립트는 weasyprint 를 우선 쓰고,
+없으면 Chrome 으로 넘어간다.
+
+인쇄용 스타일이 따로 들어 있어 PDF 에서는:
+
+- 항상 라이트 테마로 고정된다 (다크 모드 화면이어도 인쇄물은 흰 배경)
+- 카드가 페이지 경계에서 잘리지 않는다
+- 가로 스크롤되던 프레임 5장이 한 줄에 균등 배치된다
+
+### 수동으로 PDF 만들기
+
+`--pdf` 가 실패하면 브라우저에서 직접 뽑아도 된다.
+
+```bash
+open ~/Documents/fall-detection/runs/report/fnf_report.html
+```
+
+⌘P → 대상을 **"PDF로 저장"** → 저장. 인쇄 스타일이 HTML 에 포함되어 있어
+결과물은 동일하다.
