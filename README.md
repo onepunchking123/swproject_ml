@@ -123,9 +123,11 @@ docs/        실험 계획서, 결과 정리
 브라우저 없이 터미널에서 Colab GPU를 사용한다 (2026년 6월 출시 공식 도구).
 
 ```bash
-uv tool install google-colab-cli
+uv tool install google-colab-cli --with "jupyter-kernel-client==0.15.0"
 colab sessions          # 최초 1회 OAuth 인증 (브라우저에서 코드 받아 붙여넣기)
 ```
+
+의존성 버전 고정이 필요한 이유와 확인된 VM 사양은 [docs/setup.md](docs/setup.md) 참고.
 
 주요 명령:
 

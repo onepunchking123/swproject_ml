@@ -35,3 +35,6 @@ env/
 # OMC 운영 아티팩트 (.omc/skills 는 예외적으로 커밋 가능)
 .omc/
 !.omc/skills/
+
+# AI Hub API Key
+.aihub_key
