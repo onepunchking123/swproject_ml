@@ -136,7 +136,7 @@ OmniFall staged 8종의 약점 세 가지를 겨냥한다: 배우가 대부분 �
 | 후보 | 채우는 빈 곳 | 크기 | 입수 경로 | 라이선스 |
 |---|---|---|---|---|
 | **OF-Syn** (OmniFall 합성 12,000편) | 노년(65+) 그룹, **카메라 고도·방위 라벨** | 9.72GB (AV1 tar) | **Drive 확보 완료** (`falldata/omnifall_syn/`, sha256 검증, 137MB/s) | CC-BY-NC-4.0 |
-| **E-FPDS** | Stage 1 **쓰러진 사람 BBOX** 6,982장 (노년 413장) | ~2.3GB (train 재다운로드 중) | 브라우저 → rclone → `falldata/efpds/` (valid·test·FPDS_info 업로드 중) | 인용 필수 |
+| **E-FPDS** | Stage 1 **쓰러진 사람 BBOX** 6,982장 (노년 413장) | 2.61GB | **Drive 확보 완료** (`falldata/efpds/` train·valid·test·FPDS_info.tar.gz, MD5 확인) | 인용 필수 |
 | **URFD** | 연속 시퀀스, RGB+depth+가속도 | 7.98GB (zip 170 + csv 140) | **Drive 확보 완료** (`falldata/urfd/` + manifest.json, 크기 검증) | CC-BY-NC-SA-4.0 |
 | CMDFall | **연속 다중뷰 384편** — OmniFall 라벨은 있고 영상만 없음 | 대용량 | 저자 이메일 요청 | 연구용 |
 | Toyota Smarthome | **60–80세 노인 ADL**, 긴 정지 구간 (미동 음성 샘플) | 대용량 | 라이선스 폼 | 연구용 |

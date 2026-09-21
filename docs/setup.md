@@ -129,6 +129,24 @@ echo 'import subprocess; subprocess.run("python /content/prepare_omnifall.py --z
 `nohup` 으로 분리해 로그 파일에 기록한다. 커널이 이 셀을 실행하는 동안 같은 세션의
 `exec` 는 대기열에 걸리므로, 병행 작업은 `colab console`(별도 셸)로 한다.
 
+## rclone → Drive 업로드가 100% 에서 되풀이 재시작되면
+
+증상: `rclone copyto` 가 100% 에 도달한 뒤 통계 총량이 2배·3배로 늘며 처음부터 다시 올린다.
+INFO 로그에는 오류가 없다. `-vv` 로 보면 원인이 나온다:
+
+```
+pacer: low level retry 1/20 (error googleapi: Error 403: Quota exceeded for quota metric 'Queries'
+and limit 'Requests per minute' of service 'drive.googleapis.com' for consumer 'project_number:202264815644'
+```
+
+`202264815644` 는 **rclone 의 공용 client_id** 다. 전 세계 rclone 사용자가 나눠 쓰는 분당 요청
+쿼터에 걸리면 업로드 마무리 호출이 403 을 받고, rclone 은 저수준 재시도로 업로드를 다시 시작한다.
+1.8GB 파일이 네 번 재시작 뒤 5회차에 성공했다 (2026-09-21). 파일이 작을수록(수백 MB) 통과 확률이 높다.
+
+**해법: 자체 OAuth client_id 를 만든다** — https://rclone.org/drive/#making-your-own-client-id.
+rclone 이 "shared client_id 가 2026년 중 폐기된다" 고 알리는 것과 같은 문제다. 임시 완화책은
+`--tpslimit 2 --drive-chunk-size 64M` 로 요청 수를 줄이는 것.
+
 ## 세션 운영
 
 ```bash

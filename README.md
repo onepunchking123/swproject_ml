@@ -132,6 +132,7 @@ AI Hub 베이스라인 실행은 [docs/how_to_run.md](docs/how_to_run.md).
 - [x] AI Hub 라벨(TL·VL 142MB) → Drive (디스크 없는 스트리밍, `--buffer-dir`)
 - [x] 2차 공개 데이터 OF-Syn 9.72GB(합성·노년·카메라 라벨) + URFD 7.98GB → Drive (`fetch_public.py`, 11분)
 - [x] 3차 공개 데이터 FallVision 17.17GB(CC0, 침대·의자·서서 낙상 58명) → Drive (`fetch_public.py`, 40/40 MD5)
+- [x] E-FPDS 쓰러진 사람 BBOX 6,982장(2.61GB) → Drive (브라우저 다운로드 → rclone, MD5 확인)
 - [ ] AI Hub VS 55GB·TS 436GB → Drive — **GCP 서울 VM** 에서 ([docs/gcp_seoul_relay.md](docs/gcp_seoul_relay.md))
 - [x] 라벨 JSON 스키마 분석 — **키포인트 없음**, 낙상 구간 프레임 + BBOX 10장/클립 ([docs/aihub_labels.md](docs/aihub_labels.md))
 - [ ] 전처리 파이프라인
