@@ -129,24 +129,37 @@ def metrics(y_true, y_pred, names, fall_idx):
 
 
 # ── 규칙 기반 베이스라인 (학습 없음) ──────────────────────────────────
-L_SH, R_SH, L_HIP, R_HIP = 5, 6, 11, 12
+L_SH, R_SH, L_HIP, R_HIP, L_ANK, R_ANK = 5, 6, 11, 12, 15, 16
 
 
-def rule_predict(X, fall_idx, other_idx):
-    """몸통이 수직→수평으로 급변하고 하강 속도가 크면 낙상.
+def rule_predict(X, fall_idx, other_idx, t_dh=0.0, t_drel=0.2):
+    """몸통이 수평으로 눕고 + 하체 대비 골반이 내려가면 낙상.
 
-    정규화 좌표에서 어깨-엉덩이 벡터를 보면 된다. 서 있으면 y 성분이 크고,
-    누우면 x 성분이 커진다.
+    주의 — 정규화가 **엉덩이 중점을 원점으로 고정**하므로 엉덩이의 절대 y 변화는
+    정의상 항상 0 이다. 초기 구현은 이 값을 조건으로 써서 Recall 0.000 이었다.
+    카메라 불변성을 얻은 대가로 절대 위치가 사라진 것이므로, 규칙도 **관절 간
+    상대량**으로 써야 한다.
+
+    두 특징 모두 표본 343개로 분포를 측정해 임계값을 정했다:
+
+      수평도 변화 dh    fall 0.249 · fallen -0.026 · normal -0.002
+      발목-엉덩이 감소  fall 0.736 · fallen -0.045 · normal  0.022
+
+    dh>0.0 AND drel>0.2 에서 Recall 0.588 · FPR 0.076 (실측).
     """
     sho = X[:, :, [L_SH, R_SH], :2].mean(2)      # (N, T, 2)
     hip = X[:, :, [L_HIP, R_HIP], :2].mean(2)
+    ank = X[:, :, [L_ANK, R_ANK], :2].mean(2)
     v = sho - hip
-    # |y|/|x| 가 작을수록 수평. 각 프레임의 "수평도"
+    # 수평도: |x|/|y| 가 클수록 몸통이 누워 있다
     horiz = np.abs(v[..., 0]) / (np.abs(v[..., 1]) + 1e-6)
-    start = horiz[:, :len(horiz[0]) // 3].mean(1)    # 앞 1/3
-    end = horiz[:, -len(horiz[0]) // 3:].mean(1)     # 뒤 1/3
-    drop = hip[:, -1, 1] - hip[:, 0, 1]              # 엉덩이 y 변화 (아래로 +)
-    is_fall = ((end - start) > 0.8) & (drop > 0.1)
+    n3 = max(1, X.shape[1] // 3)
+    dh = horiz[:, -n3:].mean(1) - horiz[:, :n3].mean(1)
+    # 발목이 엉덩이보다 얼마나 아래인가 — 서면 크고 누우면 작다.
+    # 엉덩이가 원점이라 이 차이는 정규화에 견딘다.
+    rel = ank[..., 1] - hip[..., 1]
+    drel = rel[:, :n3].mean(1) - rel[:, -n3:].mean(1)
+    is_fall = (dh > t_dh) & (drel > t_drel)
     return np.where(is_fall, fall_idx, other_idx)
 
 
