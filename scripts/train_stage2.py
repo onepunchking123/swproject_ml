@@ -154,6 +154,10 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--holdout-cam", type=int, nargs="*",
                     help="이 카메라를 test 로 (카메라 일반화 실험)")
+    ap.add_argument("--kfold", type=int, metavar="K",
+                    help="피험자 K-fold 교차검증 (STEP 2)")
+    ap.add_argument("--loo-dataset", action="store_true",
+                    help="데이터셋 leave-one-out (STEP 3)")
     ap.add_argument("--out", type=Path, default=Path("runs/stage2"))
     args = ap.parse_args()
 
@@ -177,33 +181,111 @@ def main() -> int:
 
     args.out.mkdir(parents=True, exist_ok=True)
     todo = ["rule", "cnn1d", "lstm", "gru", "bilstm", "stgcn"] if args.all else [args.model]
-    results = {}
 
-    for name in todo:
-        t0 = time.time()
-        if name == "rule":
-            pred = rule_predict(X[te], fall_idx, other_idx)
-            m = metrics(y[te], pred, names, fall_idx)
-        else:
-            m = train_nn(name, X, y, tr, va, te, names, fall_idx, args)
-        m["seconds"] = round(time.time() - t0, 1)
-        results[name] = m
-        print(f"\n[{name}] acc {m['acc']:.3f} · recall {m['recall']:.3f} · "
-              f"prec {m['precision']:.3f} · f1 {m['f1']:.3f} · fpr {m['fpr']:.3f} "
-              f"({m['seconds']}초)")
+    # 실행할 (split 이름, tr, va, te) 목록을 만든다.
+    # Colab 세션이 예고 없이 회수되므로 각 실행마다 결과를 즉시 파일에 쓴다.
+    if args.kfold:
+        runs = kfold_splits(groups, args.kfold, args.seed)
+        tag = f"{args.task}_kfold{args.kfold}"
+    elif args.loo_dataset:
+        runs = loo_dataset_splits(dsets, groups, args.seed)
+        tag = f"{args.task}_loodataset"
+    else:
+        runs = [("single", tr, va, te)]
+        tag = f"{args.task}" + (f"_camholdout{''.join(map(str,args.holdout_cam))}" if args.holdout_cam else "")
 
-    tag = f"{args.task}" + (f"_camholdout{''.join(map(str,args.holdout_cam))}" if args.holdout_cam else "")
     f = args.out / f"results_{tag}.json"
-    f.write_text(json.dumps({"task": args.task, "classes": names,
-                             "n": len(X), "results": results}, indent=2), encoding="utf-8")
+    # 이미 끝난 조합은 건너뛴다 — 세션이 죽어도 이어서 돌릴 수 있다
+    done = {}
+    if f.exists():
+        try:
+            done = json.loads(f.read_text(encoding="utf-8")).get("results", {})
+            if done:
+                print(f"[*] 기존 결과 {len(done)}건 발견 — 건너뛴다")
+        except Exception:
+            pass
+    results = dict(done)
 
-    print(f"\n{'모델':10s}{'Acc':>8}{'Recall':>9}{'Prec':>8}{'F1':>8}{'FPR':>8}")
-    print("-" * 51)
-    for k, m in results.items():
-        print(f"{k:10s}{m['acc']:8.3f}{m['recall']:9.3f}{m['precision']:8.3f}"
-              f"{m['f1']:8.3f}{m['fpr']:8.3f}")
+    for split_name, tr_i, va_i, te_i in runs:
+        for name in todo:
+            key = name if split_name == "single" else f"{name}@{split_name}"
+            if key in results:
+                continue
+            t0 = time.time()
+            if name == "rule":
+                pred = rule_predict(X[te_i], fall_idx, other_idx)
+                m = metrics(y[te_i], pred, names, fall_idx)
+            else:
+                m = train_nn(name, X, y, tr_i, va_i, te_i, names, fall_idx, args)
+            m["seconds"] = round(time.time() - t0, 1)
+            m["split"] = split_name
+            m["n_test"] = int(te_i.sum())
+            results[key] = m
+            print(f"[{key}] acc {m['acc']:.3f} · recall {m['recall']:.3f} · "
+                  f"prec {m['precision']:.3f} · f1 {m['f1']:.3f} · fpr {m['fpr']:.3f} "
+                  f"({m['seconds']}초)", flush=True)
+            # 증분 저장 — 여기서 죽어도 여기까지는 남는다
+            f.write_text(json.dumps({"task": args.task, "classes": names, "n": len(X),
+                                     "results": results}, indent=2), encoding="utf-8")
+
+    summarize(results, todo, names)
     print(f"\n저장: {f}")
     return 0
+
+
+def kfold_splits(groups, k, seed):
+    """피험자를 k 조로 나눈다. 각 조가 한 번씩 test 가 되고, 나머지 중 일부가 val."""
+    rng = np.random.default_rng(seed)
+    uniq = np.array(sorted(set(groups)))
+    rng.shuffle(uniq)
+    folds = np.array_split(uniq, k)
+    out = []
+    for i, fold in enumerate(folds):
+        te = np.isin(groups, fold)
+        rest = np.array(sorted(set(uniq) - set(fold)))
+        n_va = max(1, len(rest) // 6)
+        va = np.isin(groups, rest[:n_va])
+        tr = np.isin(groups, rest[n_va:])
+        out.append((f"fold{i}", tr, va, te))
+    return out
+
+
+def loo_dataset_splits(dsets, groups, seed):
+    """데이터셋 하나를 통째로 test 로. 환경이 바뀌어도 되는지 본다."""
+    rng = np.random.default_rng(seed)
+    out = []
+    for ds in sorted(set(dsets)):
+        te = dsets == ds
+        rest_g = np.array(sorted(set(groups[~te])))
+        rng.shuffle(rest_g)
+        n_va = max(1, len(rest_g) // 6)
+        va = np.isin(groups, rest_g[:n_va]) & ~te
+        tr = np.isin(groups, rest_g[n_va:]) & ~te
+        out.append((ds, tr, va, te))
+    return out
+
+
+def summarize(results, todo, names):
+    """모델별 요약. 여러 split 이면 평균 ± 표준편차."""
+    print(f"\n{'모델':12s}{'Acc':>8}{'Recall':>9}{'Prec':>8}{'F1':>8}{'FPR':>8}")
+    print("-" * 53)
+    for name in todo:
+        ms = [m for k, m in results.items() if k == name or k.startswith(f"{name}@")]
+        if not ms:
+            continue
+        if len(ms) == 1:
+            m = ms[0]
+            print(f"{name:12s}{m['acc']:8.3f}{m['recall']:9.3f}{m['precision']:8.3f}"
+                  f"{m['f1']:8.3f}{m['fpr']:8.3f}")
+        else:
+            a = {k: np.array([m[k] for m in ms]) for k in ("acc", "recall", "precision", "f1", "fpr")}
+            print(f"{name:12s}{a['acc'].mean():8.3f}{a['recall'].mean():9.3f}"
+                  f"{a['precision'].mean():8.3f}{a['f1'].mean():8.3f}{a['fpr'].mean():8.3f}")
+            print(f"{'  ±std':12s}{a['acc'].std():8.3f}{a['recall'].std():9.3f}"
+                  f"{a['precision'].std():8.3f}{a['f1'].std():8.3f}{a['fpr'].std():8.3f}")
+            for m in ms:
+                print(f"    {m['split']:10s} recall {m['recall']:.3f} · fpr {m['fpr']:.3f} "
+                      f"· n={m['n_test']}")
 
 
 def train_nn(kind, X, y, tr, va, te, names, fall_idx, args):
