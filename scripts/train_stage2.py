@@ -185,6 +185,7 @@ def main() -> int:
     ap.add_argument("--loo-dataset", action="store_true",
                     help="데이터셋 leave-one-out (STEP 3)")
     ap.add_argument("--out", type=Path, default=Path("runs/stage2"))
+    ap.add_argument("--save-model", type=Path, help="학습된 가중치를 저장할 디렉토리")
     args = ap.parse_args()
 
     X, y, groups, cams, dsets, names = load(args.kps, args.manifest, args.seq_len, args.task)
@@ -427,6 +428,12 @@ def train_nn(kind, X, y, tr, va, te, names, fall_idx, args):
                 break
 
     m.load_state_dict(best_state)
+    # 추론에 쓰려면 가중치를 남겨야 한다. 평가만 하면 학습이 끝나는 순간 사라진다.
+    if getattr(args, "save_model", None):
+        args.save_model.mkdir(parents=True, exist_ok=True)
+        torch.save({"state_dict": best_state, "kind": kind, "classes": names,
+                    "seq_len": args.seq_len, "task": args.task},
+                   args.save_model / f"{kind}.pt")
     m.eval()
     with torch.no_grad():
         pt = m(Xt[te].to(dev)).argmax(1).cpu().numpy()
