@@ -49,6 +49,12 @@ TASKS = {
 
 def load(kps_dir: Path, manifest: Path, seq_len: int, task: str):
     rows = list(csv.DictReader(manifest.open(encoding="utf-8")))
+    # .npz 묶음이면 한 번에 읽는다. Drive FUSE 는 작은 파일 개별 읽기가 극도로
+    # 느려서(실측: np.load 가 D 상태로 2분 이상 정지) 파일 하나로 묶는 편이 낫다.
+    pack = None
+    if kps_dir.suffix == ".npz":
+        pack = np.load(kps_dir)
+        print(f"[*] 묶음 로드: {len(pack.files):,}개")
     mapping = TASKS[task]
     if mapping:
         to_new = {old: i for i, (_, olds) in enumerate(mapping.items()) for old in olds}
@@ -61,11 +67,17 @@ def load(kps_dir: Path, manifest: Path, seq_len: int, task: str):
     missing = 0
     for r in rows:
         uid = f"{r['dataset']}__{Path(r['clip']).stem}"
-        f = kps_dir / f"{uid}.npy"
-        if not f.exists():
-            missing += 1
-            continue
-        a = np.load(f)                       # (T, 17, 3)
+        if pack is not None:
+            if uid not in pack:
+                missing += 1
+                continue
+            a = pack[uid]                    # (T, 17, 3)
+        else:
+            f = kps_dir / f"{uid}.npy"
+            if not f.exists():
+                missing += 1
+                continue
+            a = np.load(f)
         if a.shape[0] < 2:
             continue
         # 고정 길이로 리샘플 — 낙상은 1~2초로 짧고 fallen 은 길다. 길이 자체가
@@ -141,7 +153,8 @@ def rule_predict(X, fall_idx, other_idx):
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--kps", type=Path, required=True)
+    ap.add_argument("--kps", type=Path, required=True,
+                    help=".npy 디렉토리 또는 pack_keypoints.py 로 만든 .npz")
     ap.add_argument("--manifest", type=Path, required=True)
     ap.add_argument("--task", choices=list(TASKS), default="risk")
     ap.add_argument("--model", default="lstm",
