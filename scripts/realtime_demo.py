@@ -25,7 +25,7 @@ fallen 0.79 를 내는 것을 확인했다(pipeline_core 검증). 화면에서 �
 """
 from __future__ import annotations
 
-import argparse, json, sys, time
+import argparse, json, sys, time, unicodedata
 from collections import deque
 from pathlib import Path
 
@@ -185,8 +185,10 @@ def main() -> int:
         print(f"[*] 소스 → {args.source}")
     # 라벨을 안 줬으면 같은 이름의 .json 을 data/ 아래에서 찾는다 (AI Hub 샘플 구조)
     if args.gt_json is None:
+        # macOS 는 한글 파일명을 NFD 로 저장해 소스의 "영상"(NFC) 과 그대로 비교하면 안 맞는다
+        nfc = lambda s: unicodedata.normalize("NFC", s)
         cand = sorted(args.data_root.rglob(f"{args.source.stem}.json"),
-                      key=lambda q: ("영상" not in q.parts, str(q)))   # 영상/ 라벨 우선 (센서/ 것과 내용은 같다)
+                      key=lambda q: ("영상" not in map(nfc, q.parts), str(q)))   # 영상/ 라벨 우선
         if cand:
             args.gt_json = cand[0]
             print(f"[*] 라벨 → {args.gt_json}")
