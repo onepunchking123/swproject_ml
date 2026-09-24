@@ -56,7 +56,8 @@ def spark(states, total, gt, w=560, h=50):
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--demo", type=Path, default=Path("runs/demo"), help="events.jsonl 과 mp4 가 있는 폴더")
-    ap.add_argument("--labels", type=Path, help="AI Hub 라벨 루트 (정답 구간 음영용)")
+    ap.add_argument("--labels", type=Path, default=Path("data/aihub_sample/02.라벨링데이터/영상"),
+                    help="AI Hub 라벨 루트 (정답 구간 음영용)")
     ap.add_argument("--out", type=Path, default=Path("runs/report"))
     ap.add_argument("--width", type=int, default=420)
     ap.add_argument("--pdf", action="store_true")

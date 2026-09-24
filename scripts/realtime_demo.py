@@ -19,8 +19,9 @@ fallen 0.79 를 내는 것을 확인했다(pipeline_core 검증). 화면에서 �
 "넘어져 있다" 로 오판하므로 detection_rate < min_det 이면 상태를 no_person 으로 둔다.
 
 사용법:
-    python realtime_demo.py --source clip.mp4 --model runs/models/gru.pt \
-        --save-video out.mp4 --events out.jsonl [--gt-json label.json] [--no-display]
+    python realtime_demo.py --source 00003_H_A_FY_C1          # data/ 아래에서 이름으로 찾음, 라벨 자동
+    python realtime_demo.py --source path/to/clip.mp4 [--gt-json label.json] \
+        [--save-video out.mp4] [--events out.jsonl] [--no-display]
 """
 from __future__ import annotations
 
@@ -139,7 +140,10 @@ def draw(frame, kps_px, state, prob, classes, fps, banner, t, total_t, gt):
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--source", type=Path, required=True, help="영상 파일")
+    ap.add_argument("--source", type=Path, required=True,
+                    help="영상 파일 경로, 또는 data/ 아래에서 찾을 파일명 (예: 00003_H_A_FY_C1)")
+    ap.add_argument("--data-root", type=Path, default=Path("data"),
+                    help="--source 가 경로가 아닐 때 검색할 루트")
     ap.add_argument("--model", type=Path, default=Path("runs/models/gru.pt"))
     ap.add_argument("--pose", default="yolo11n-pose.pt")
     ap.add_argument("--device", default="auto", help="auto|mps|cuda|cpu")
@@ -170,6 +174,22 @@ def main() -> int:
     fi = classes.index("fall"); fli = classes.index("fallen")
     print(f"[*] {kind} · {classes} · seq {seq_len} · device {dev}")
 
+    # --source 가 파일이 아니면 data/ 아래에서 <이름>.mp4 를 찾는다. 데모 영상을 프로젝트
+    # 안에 두고 긴 경로 없이 이름만으로 돌리기 위해서다.
+    if not args.source.exists():
+        stem = args.source.stem if args.source.suffix == ".mp4" else args.source.name
+        hits = sorted(args.data_root.rglob(f"{stem}.mp4"))
+        if not hits:
+            print(f"[!] 영상을 찾을 수 없다: {args.source}  ({args.data_root}/ 아래 검색)"); return 1
+        args.source = hits[0]
+        print(f"[*] 소스 → {args.source}")
+    # 라벨을 안 줬으면 같은 이름의 .json 을 data/ 아래에서 찾는다 (AI Hub 샘플 구조)
+    if args.gt_json is None:
+        cand = sorted(args.data_root.rglob(f"{args.source.stem}.json"),
+                      key=lambda q: ("영상" not in q.parts, str(q)))   # 영상/ 라벨 우선 (센서/ 것과 내용은 같다)
+        if cand:
+            args.gt_json = cand[0]
+            print(f"[*] 라벨 → {args.gt_json}")
     cap = cv2.VideoCapture(str(args.source))
     if not cap.isOpened():
         print(f"[!] 영상을 열 수 없다: {args.source}"); return 1

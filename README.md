@@ -17,12 +17,18 @@
 ## 바로 실행
 
 ```bash
-./venv_aihub/bin/python scripts/realtime_demo.py \
-  --source <영상.mp4> --model runs/models/gru.pt \
-  --save-video runs/demo/out.mp4 --events runs/demo/out.jsonl
+./venv_aihub/bin/python scripts/realtime_demo.py --source 00003_H_A_FY_C1
 ```
 
-창이 뜨고 골격·상태·확률·FPS·알림 배너가 오버레이된다. `q` 로 종료. `--no-display` 면 저장만 한다.
+데모 영상은 `data/aihub_sample/` 에 있다. 이름만 주면 찾고, 같은 이름의 라벨(정답 낙상 구간)도 자동으로 붙는다.
+창이 뜨고 골격·상태·확률·FPS·알림 배너가 오버레이된다. `q` 로 종료. 임의 영상은 `--source path/to/clip.mp4`.
+
+| 장면 | 이름 (C1~C8) | 정답 낙상 시작 |
+|---|---|---|
+| 전면낙상 | `00003_H_A_FY_C1` | 4.3초 |
+| 측면낙상 | `00015_H_A_SY_C1` | 4.7초 |
+| 후면낙상 | `00151_H_A_BY_C1` | 6.3초 |
+| 비낙상 | `00047_H_A_N_C1` | — (침대에 엎드리는 장면에서 FALL 오탐 1회, CRITICAL 없음) |
 환경 구성은 [docs/how_to_run.md](docs/how_to_run.md) §0.
 
 ## 결과 한눈에
@@ -48,7 +54,8 @@ scripts/archive/    데이터 확보·AI Hub 스트리밍 등 완료/중단된 �
 docs/               결과 · 구조 · 실행법 (9개)
 docs/archive/       계획서 · 경과 기록 · 오염 데이터 중간 결과
 configs/            공개 데이터셋 레지스트리 (datasets.yaml)
-runs/               모델 · 데모 영상 · 보고서 · 캐시  (git 제외)
+data/aihub_sample/  데모·평가용 AI Hub 샘플 32영상 + 라벨  (git 제외)
+runs/               모델 · 데모 출력 · 보고서 · 캐시  (git 제외)
 aihub_model/        AI Hub 공식 베이스라인 모델 (RandomForest)  (git 제외)
 ```
 

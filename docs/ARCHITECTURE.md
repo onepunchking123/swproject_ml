@@ -246,13 +246,16 @@ docs/
 ## 실행
 
 ```bash
+./venv_aihub/bin/python scripts/realtime_demo.py --source 00003_H_A_FY_C1   # data/ 아래에서 이름으로 찾음
 ./venv_aihub/bin/python scripts/realtime_demo.py \
   --source <영상.mp4> --model runs/models/gru.pt \
   --save-video runs/demo/out.mp4 --events runs/demo/out.jsonl \
-  [--gt-json <AI Hub 라벨.json>]      # 정답 구간 오버레이
+  [--gt-json <AI Hub 라벨.json>]      # 정답 구간 오버레이 (data/ 에 같은 이름 json 이 있으면 자동)
   [--no-display]                      # 화면 없이 저장만
   [--t-fallen 3 --t-still 5 --eps 0.02]
 ```
+
+데모 영상 위치: `data/aihub_sample/01.원천데이터/영상/{Y/FY,Y/SY,Y/BY,N/N}/<장면>_C<1~8>/`
 
 `events.jsonl` 한 줄: `{"frame", "t_sec", "state", "prob":[normal,fall,fallen], "event", "rule"}`.
 stride 마다 상태 행(event=null), 이벤트 발생 시 이벤트 행.
