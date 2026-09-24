@@ -90,6 +90,8 @@ def main() -> int:
     for r in rows:
         uid = f"{r['dataset']}__{Path(r['clip']).stem}"
         if pack is not None and uid not in pack: continue
+        # load() 는 2프레임 미만 클립을 건너뛴다 — 같은 필터를 적용해 순서를 맞춘다
+        if pack is not None and pack[uid].shape[0] < 2: continue
         uids.append(uid)
     uids = np.array(uids)[te]
 
