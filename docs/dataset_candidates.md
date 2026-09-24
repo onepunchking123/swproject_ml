@@ -120,3 +120,84 @@ Untrimmed 버전도 있어 연속 영상 평가에 쓸 수 있다.
 - **위치 맥락** — 침대/소파 ROI 에서의 수평 자세는 감점
 - **지속 시간** — `fallen` 이 일정 시간 지속될 때만 경보
 - **자세 전이** — 서 있다가 갑자기 누운 것인지, 처음부터 누워 있었는지
+
+---
+
+## 2026-09-24 추가 조사 — 재학습용 후보 (파이프라인 변경 없이)
+
+기준: **RGB 영상**이면 YOLO → 정규화 → GRU 를 그대로 태울 수 있다. 관절만 배포되는 데이터셋은
+Kinect 25/20 관절 → COCO 17 매핑이 필요해 `extract_keypoints.py` 를 건너뛰는 별도 로더가 든다.
+
+### 1순위 — CMDFALL (가장 크고, OmniFall 라벨이 이미 있다)
+
+| 항목 | 값 |
+|---|---|
+| 규모 | **7시간 7분** · 50명(21~40세) · 7 Kinect 뷰 · 20동작 |
+| 동작 | 낙상 8종 (서서·앉아서·**누워서** 넘어짐, 4방향) · 일상 12종 — **누움 4종(침대) · 앉음 4종(의자·침대)** |
+| 형식 | RGB AVI 640×480 20Hz + 깊이 BIN + 가속도 |
+| 용량 | 피험자당 ~7GB (RGB+깊이). RGB 만 요청하면 훨씬 작다 |
+| 라벨 | **OmniFall `labels/cmdfall.csv` 로 16클래스 재라벨링 완료** → `build_manifest.py` 에 바로 연결 |
+| 접근 | 연구 목적 무료. thanh-hai.tran@mica.edu.vn 메일 요청 |
+| 출처 | [MICA 프로젝트 페이지](https://www.mica.edu.vn/perso/Tran-Thi-Thanh-Hai/CMDFALL.html) |
+
+OmniFall 논문에서 staged 학습 데이터의 **절반 이상**을 차지하는 셋이다 (7h 7m / 전체 staged 약 12h).
+현재 우리 학습 데이터(50분)의 **8.5배**. 침대 누움·침대에서 낙상이 모두 있어 `lying` vs `fallen` 문제를 직접 겨냥한다.
+Zenodo 배포판에 빠져 있어 원저자에게 받아야 한다 — 메일 한 통이면 된다.
+
+### 2순위 — Toyota Smarthome (실제 노인, 긴 정상 영상)
+
+| 항목 | 값 |
+|---|---|
+| 규모 | trimmed 16,129클립 · **untrimmed 536영상 × 평균 21분** · 60~80세 18명 |
+| 형식 | RGB 640×480 + 깊이 + 3D 골격 |
+| 접근 | [프로젝트 페이지](https://project.inria.fr/toyotasmarthome/) 신청 폼 · toyotasmarthome@inria.fr |
+
+낙상은 없다. 대신 **[ISSUES.md](ISSUES.md) 8번 "시간당 오경보" 측정에 필요한 긴 정상 영상**이 바로 이것이다.
+untrimmed 536편을 파이프라인에 흘려 하루 오경보 횟수를 실측할 수 있다. 학습에는 `lying`·`sitting` 실제 분포 보강.
+
+### 3순위 — NTU RGB+D 120 (규모, 낙상 클래스 A43)
+
+| 항목 | 값 |
+|---|---|
+| 규모 | 114,480 샘플 · 120클래스 · 106명(10~57세) · 3 뷰 · 155 시점 |
+| 관련 클래스 | A43 **falling down** · A8 sit down · A9 stand up · 그 외 일상 |
+| 형식 | RGB 1920×1080 + 깊이 + IR + 25관절 골격 |
+| 접근 | [ROSE Lab](https://rose1.ntu.edu.sg/dataset/actionRecognition/) 계정 등록 → 릴리스 동의 → 승인 |
+
+RGB 전체는 수백 GB 라 **A43 + 일상 몇 클래스만** 받는다. `lying` 이 명시 클래스로 없다는 게 약점.
+
+### 관절만 배포 — 매핑 로더 필요 (파이프라인 변경 있음)
+
+| 데이터셋 | 내용 | 왜 관심 | 접근 |
+|---|---|---|---|
+| **ETRI-Activity3D** | 한국 노인 50명(64~88세)+청년 50명 · 55동작 · 25관절 20.8GB | 유일한 **한국 노인** 실데이터. 낙상 클래스 유무 미확인 | ETRI 문의 |
+| FUKinect-Fall | 21명(**19~72세**) · 걷기/굽히기/앉기/쪼그리기/**눕기**/낙상 · 1,008 깊이영상 + 20관절 7.5GB | 노인 포함, lying 있음. RGB 없음 | [GitHub](https://github.com/MuzafferAslan23/Fall-Detection-Dataset) SharePoint 링크 |
+
+### 제외
+
+| 데이터셋 | 이유 |
+|---|---|
+| TST v2 (9.3GB, 깊이+골격) | IEEE DataPort 유료 구독 필요 |
+| falldataset.com (22,636장) | 정지 이미지 — 시계열 모델에 못 쓴다 |
+| Zenodo 20966276 "Eldercare Robot" | 파일 비공개, 규모 미상 |
+| Unidata 10,000영상 | 상업 판매 |
+| Kaggle "Multiple Cameras Fall" | = MCFD, Drive 에 이미 있음 |
+
+### 재학습 우선순위 (Drive 확보분 포함)
+
+```
+A. Drive 에 이미 있음 — 키포인트 추출만 하면 된다
+   1. OmniFall staged 4종 (LE2I·MCFD·UP_Fall·OCCU)  26GB   → 환경 다양성 (ISSUES 6번)
+   2. OF-Synthetic 부족 클래스 (lying·lie_down·fallen 3,600)  → lying 53배 (ISSUES 4번)  ※ AV1 변환
+   3. FallVision 16GB                                  → 침대/의자 낙상 구분
+
+B. 신청 필요 — 지금 메일 보내면 A 하는 동안 온다
+   4. CMDFALL      메일 1통 · 7시간 · OmniFall 라벨 있음   → 학습량 8.5배, 침대 누움/낙상
+   5. Toyota Smarthome untrimmed  신청 폼                → 시간당 오경보 측정 (학습 X, 평가용)
+   6. NTU RGB+D A43 + 일상 일부  계정 승인
+   7. ETRI-Activity3D 관절        ETRI 문의               → 한국 노인 (매핑 로더 필요)
+```
+
+A 를 끝내면 학습 데이터가 50분 → 약 3.5시간(+합성), CMDFALL 까지 오면 10시간을 넘는다.
+**어디서 추출할지**가 병목이다 — Colab 은 세션 회수 8회로 실패했다. 로컬 M3 로 밤새 돌리는 것이
+가장 확실하다 (YOLOv11n-pose 30 FPS 기준 10시간 영상 ≈ 10~12시간).
