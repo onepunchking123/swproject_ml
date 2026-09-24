@@ -11,7 +11,6 @@ raw/
 *.tar
 *.zip
 *.7z
-
 # 학습 산출물 (용량 큼, Drive에 보관)
 runs/
 weights/
@@ -19,7 +18,6 @@ weights/
 *.onnx
 *.mlpackage
 *.engine
-
 # ── 일반 ─────────────────────────────────────────────
 __pycache__/
 *.py[cod]
@@ -27,24 +25,20 @@ __pycache__/
 venv/
 .venv/
 env/
-
 .DS_Store
 .idea/
 .vscode/
-
 # OMC 운영 아티팩트 (.omc/skills 는 예외적으로 커밋 가능)
 .omc/
 !.omc/skills/
-
 # AI Hub API Key
 .aihub_key
-
 # 키포인트 캐시 (영상당 4MB, 재생성 가능)
 runs/keypoints/
 *.npy
-
 # 가상환경
 venv_aihub/
-
 # 압축 해제한 라벨 (재생성 가능)
-data/
+
+# AI Hub 공식 베이스라인 모델 (제3자 산출물, 100MB) — 웹에서 별도 다운로드
+aihub_model/

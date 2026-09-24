@@ -4,10 +4,20 @@
 
 브라우저 없이 터미널에서 Colab 런타임을 사용한다.
 
+**2026-09-24 갱신 — 현재 동작하는 조합은 0.7.2 + jupyter-kernel-client 0.9.0 이다.**
+
 ```bash
-uv tool install google-colab-cli --with "jupyter-kernel-client==0.15.0"
-colab sessions   # 최초 1회 OAuth — URL을 브라우저에서 열고 코드를 붙여넣는다
+uv tool install "google-colab-cli==0.7.2"
+# 0.7.2 는 jkc==0.8 을 고정 요구하지만 0.8.0 에는 JupyterSubprotocol 이 없어 exec 가 깨진다.
+# 0.9.0 부터 있으므로 도구 환경에 직접 덮어쓴다 (--with 로는 resolver 가 거절한다).
+uv pip install --python ~/.local/share/uv/tools/google-colab-cli/bin/python --no-deps "jupyter-kernel-client==0.9.0"
+colab sessions < /dev/null   # 최초 1회 OAuth. stdin 을 닫아야 토큰 만료 시 프롬프트에 멈추지 않는다
 ```
+
+`< /dev/null` 이 중요하다 — 토큰이 만료되면 CLI 가 인증 URL 을 띄우고 입력을 기다리는데,
+스크립트에서 호출하면 그것이 "무응답" 처럼 보인다 (실측: 10분 타임아웃으로 오진).
+
+아래는 0.6.0 시절 기록이다.
 
 ### 의존성 버전 고정이 필요한 이유
 

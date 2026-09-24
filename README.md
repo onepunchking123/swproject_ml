@@ -1,182 +1,68 @@
-# 치매환자 모니터링 — 이상상황 감지 모델
+# 낙상·미동 감지 파이프라인
 
-영상 기반으로 **낙상**과 **장시간 미동**을 감지하는 2단계 파이프라인 연구.
-
-## 문제 정의
-
-YOLO는 단일 프레임 검출기지만, 감지하려는 두 이벤트는 모두 시간 축이 필요하다.
-
-- **낙상**: 서있음 → 누움으로의 *전이*. 단일 프레임의 "누워있는 사람"은 낙상이 아니라 자는 사람일 수 있다.
-- **미동 없음**: 정의상 N초 이상 움직임이 없어야 한다. 프레임 하나로는 판단 불가.
-
-따라서 검출(공간) 과 판정(시간) 을 분리한다.
+치매환자·독거노인 모니터링을 위한 영상 기반 이상상황 감지. **낙상**과 **낙상 후 방치(미동)**를
+단일 카메라 영상에서 실시간으로 잡는다.
 
 ```
-[Stage 1] YOLOv11-pose  →  사람 검출 + 17 키포인트 (프레임 단위)
-              ↓
-      ByteTrack  →  사람별 시계열 키포인트 버퍼 (30~60 프레임)
-              ↓
-     ┌────────┴────────┐
- [Stage 2-A]        [Stage 2-B]
- 낙상 분류          미동 판정
- 규칙 / LSTM /      변위 분산 + 맥락
- GRU / ST-GCN       (자세·위치·시간대)
+영상 → YOLOv11n-pose → 17 키포인트 → 카메라 불변 정규화 → GRU → normal / fall / fallen
+                                                                    ↓
+                                            규칙: 위험 상태 3초 지속 → 낙상 후 방치 (CRITICAL)
 ```
 
-## 실행 환경
+문서 두 개면 전체가 보인다:
 
-| 작업 | 장소 | 이유 |
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — 구조 · 모델 카드 · 미동 규칙 · 파일 지도
+- **[docs/SUMMARY.md](docs/SUMMARY.md)** — 완료된 것 · 미완 · 논문 관점 완결성
+
+## 바로 실행
+
+```bash
+./venv_aihub/bin/python scripts/realtime_demo.py \
+  --source <영상.mp4> --model runs/models/gru.pt \
+  --save-video runs/demo/out.mp4 --events runs/demo/out.jsonl
+```
+
+창이 뜨고 골격·상태·확률·FPS·알림 배너가 오버레이된다. `q` 로 종료. `--no-display` 면 저장만 한다.
+환경 구성은 [docs/how_to_run.md](docs/how_to_run.md) §0.
+
+## 결과 한눈에
+
+| | AI Hub 공식 베이스라인 | 본 파이프라인 |
 |---|---|---|
-| 데이터 다운로드 · 전처리 | Colab | 로컬 SSD 부족 (18GB) |
-| Stage 1 YOLO 학습 | Colab Pro (A100/L4) | M3 MPS는 대규모 학습에 부적합 |
-| Stage 2 시계열 학습 | 로컬 M3 | 입력이 키포인트 좌표라 모델이 작음 |
-| 결과 분석 · 시각화 | 로컬 M3 | |
+| 입력 차원 | 997,200 (얼굴 랜드마크 84%) | **20,400** |
+| 카메라 대응 | 위치별 모델 8개 | **단일 모델** |
+| 낙상 Recall (AI Hub 샘플 32영상) | 0.833 | **0.917** |
+| 카메라 판정 편차 (같은 장면 8각도) | 0.30 | **0.213** |
+| 5-fold Recall / FPR (OmniFall, 피험자 단위) | — | 0.867 / 0.112 |
+| 실시간 처리 (M3 MPS) | — | 23~30 FPS · 감지 지연 ≤ 0.5초 |
 
-**코드는 GitHub, 데이터는 Colab/Drive.** 데이터는 절대 커밋하지 않는다.
-
-## 데이터셋
-
-### 주력 — AI Hub 「낙상사고 위험동작 영상-센서 쌍 데이터」
-
-`dataSetSn=71641` · 영상 22,672 클립 + 이미지 226,720장 · BBOX/키포인트 JSON
-
-| 클래스 | 비율 |
-|---|---|
-| 전면낙상 | 34.12% |
-| 후면낙상 | 25.65% |
-| 측면낙상 | 15.17% |
-| 비낙상 | 25.05% |
-
-병원·요양시설·가정 촬영. 보조기구(지팡이/휠체어/목발/보행기) 메타데이터 포함.
-
-### 보조 — AI Hub 「독거노인 돌봄용 위험감지 데이터」
-
-`dataSetSn=71803` · 44.45GB · 멀티모달 센서 + 적외선 + 텍스트 · 응급/주의/일상 6종
-
-적외선이라 RGB 모델과 도메인이 다르다. 2차 확장(야간 모니터링)과 "미동 없음" 검증용.
-
-### AI Hub 공식 베이스라인 모델
-
-데이터셋과 함께 공식 모델이 제공된다 — 영상은 카메라 위치별 RandomForest 8개,
-센서는 LSTM/CNN/RF/SVM 등 9개, 그리고 영상+센서 앙상블.
-
-사람 검출 단계가 없고 카메라 위치 고정을 전제하므로 본 연구에 직접 쓰지는 않지만,
-**같은 데이터셋에 대한 공식 베이스라인**이므로 비교 대상으로 삼는다.
-상세 분석은 [docs/aihub_baseline.md](docs/aihub_baseline.md).
-
-### 공개 데이터셋 — OmniFall 통합본 (주력 공개 데이터)
-
-8개 공개 낙상 데이터셋(Le2i, UP-Fall, GMDCSA24, CAUCAFall, MCFD, EDF, OCCU,
-OOPS 실제 사고 영상)을 **하나의 16클래스 시간 구간 라벨**로 다시 붙인 배포판.
-30.1GB, Zenodo. AI Hub 와 달리 지역 차단이 없어 Colab 에서 직접 받는다.
-
-`fall`(넘어짐) / `fallen`(넘어진 상태) / `lying`(정상적으로 누운 상태) 가 구분되어
-있어 **"미동 없음" 판정의 기준 상태**를 그대로 제공한다. 이 라벨 스키마를 프로젝트의
-통합 manifest 형식으로 채택한다.
-
-조사 결과와 라이선스 구분은 [docs/public_datasets.md](docs/public_datasets.md),
-레지스트리는 [configs/datasets.yaml](configs/datasets.yaml).
-
-**라이선스 주의**: Le2i·URFD 는 CC-BY-NC(비상업). 논문 실험에는 쓰되 **서비스에
-올리는 모델은 AI Hub 데이터(+MIT 인 GMDCSA24)로 학습**한다.
-
-## 실험 설계
-
-### Stage 1 — 검출 / 자세추정
-
-| 모델 | 파라미터 | 역할 |
-|---|---|---|
-| YOLOv11n | 2.6M | 검출 베이스라인 · 엣지 후보 |
-| YOLOv11s | 9.4M | 검출 주력 |
-| YOLOv11m | 20.1M | 성능 상한 확인 |
-| YOLOv11n-pose | 2.9M | 키포인트 (Stage 2 입력) |
-| YOLOv11s-pose | 9.7M | 키포인트 주력 |
-| RT-DETR-L | 32M | 트랜스포머 대조군 (NMS-free) |
-
-### Stage 2 — 시계열 낙상 분류
-
-| 방법 | 역할 |
-|---|---|
-| 규칙 기반 (종횡비 + 몸통각도 + 하강속도) | 필수 베이스라인 · 학습 불필요 · 해석 가능 |
-| 1D-CNN | 경량 딥러닝 대조 |
-| LSTM | 표준 시계열 |
-| GRU | LSTM 대비 경량 |
-| BiLSTM + Attention | 성능 상한 |
-| ST-GCN | 골격 그래프 구조 명시 모델링 |
-
-### 평가 지표
-
-낙상 감지는 **Recall 우선**이다. 놓치면 사람이 다치고, 오탐은 보호자가 확인하면 된다.
-다만 오탐이 잦으면 알림을 무시하게 되는 경보 피로(alarm fatigue) 가 생기므로 FPR도 함께 보고한다.
-
-측정: Accuracy · Precision · **Recall** · F1 · **FPR** · 지연시간(낙상 발생 → 감지까지 프레임 수)
-
-**데이터 누수 주의**: 같은 클립의 프레임이 train/val에 갈라지면 성능이 부풀려진다.
-split은 반드시 **클립 단위**로 한다.
-
-## 진행 상황
-
-**학습 파이프라인은 [docs/pipeline.md](docs/pipeline.md)** — 작업 순서, 데이터, 설계 근거.
-
-AI Hub 베이스라인 실행은 [docs/how_to_run.md](docs/how_to_run.md).
-
-현황은 [docs/status.md](docs/status.md), 다음 작업 계획은 [docs/next_steps.md](docs/next_steps.md),
-베이스라인 재현 기록은 [docs/baseline_run.md](docs/baseline_run.md) 참고.
-
-- [x] 데이터셋 조사 및 선정
-- [x] AI Hub 데이터 신청 승인
-- [x] AI Hub API Key 발급
-- [x] Colab CLI 환경 구축
-- [x] 데이터셋 실제 구성 확인 (491GB, Training 원천은 분할 불가)
-- [x] 공개 데이터셋 OmniFall 30.06GB → Drive (8/8 MD5 검증)
-- [x] AI Hub 라벨(TL·VL 142MB) → Drive (디스크 없는 스트리밍, `--buffer-dir`)
-- [x] 2차 공개 데이터 OF-Syn 9.72GB(합성·노년·카메라 라벨) + URFD 7.98GB → Drive (`fetch_public.py`, 11분)
-- [x] 3차 공개 데이터 FallVision 17.17GB(CC0, 침대·의자·서서 낙상 58명) → Drive (`fetch_public.py`, 40/40 MD5)
-- [x] E-FPDS 쓰러진 사람 BBOX 6,982장(2.61GB) → Drive (브라우저 다운로드 → rclone, MD5 확인)
-- [ ] AI Hub VS 55GB·TS 436GB → Drive — **GCP 서울 VM** 에서 ([docs/gcp_seoul_relay.md](docs/gcp_seoul_relay.md))
-- [x] 라벨 JSON 스키마 분석 — **키포인트 없음**, 낙상 구간 프레임 + BBOX 10장/클립 ([docs/aihub_labels.md](docs/aihub_labels.md))
-- [ ] 전처리 파이프라인
-- [ ] Stage 1 학습 및 모델 비교
-- [ ] Stage 2 베이스라인 → 딥러닝 비교
-- [ ] 미동 판정 로직
-- [ ] 교차 데이터셋 평가
+**알려진 한계** — 학습 데이터에 `lying`(침대에 누움)이 1.9% 뿐이라 침대에 엎드리는 장면을
+낙상으로 오판한다. 다만 지속 시간 규칙 덕에 CRITICAL 로는 이어지지 않는다.
+원인·해결책은 [docs/results_aihub_pipeline.md](docs/results_aihub_pipeline.md) · [docs/dataset_candidates.md](docs/dataset_candidates.md).
 
 ## 디렉토리
 
 ```
-notebooks/   Colab 노트북
-scripts/     전처리 · 학습 · 평가
-configs/     data.yaml, 하이퍼파라미터
-docs/        실험 계획서, 결과 정리
+scripts/            현재 파이프라인 (pipeline_core · realtime_demo · train_stage2 · 보고서 생성기)
+scripts/archive/    데이터 확보·AI Hub 스트리밍 등 완료/중단된 스크립트
+docs/               결과 · 구조 · 실행법 (9개)
+docs/archive/       계획서 · 경과 기록 · 오염 데이터 중간 결과
+configs/            공개 데이터셋 레지스트리 (datasets.yaml)
+runs/               모델 · 데모 영상 · 보고서 · 캐시  (git 제외)
+aihub_model/        AI Hub 공식 베이스라인 모델 (RandomForest)  (git 제외)
 ```
 
-## Colab CLI
+## 데이터
 
-브라우저 없이 터미널에서 Colab GPU를 사용한다 (2026년 6월 출시 공식 도구).
+| 출처 | 용도 | 상태 |
+|---|---|---|
+| **OmniFall** (Zenodo, 8종 통합) | 학습 · 5-fold · leave-one-out | 3종 1,194클립 학습 완료 · 4종 + 합성 12k 은 Drive 확보, 추출 미완 |
+| **AI Hub 낙상 데이터** 샘플 32영상 | 베이스라인 비교 · 카메라 편차 · 실시간 데모 | 확보. 본편 491GB 는 해외 IP 차단으로 미확보 |
+| AI Hub 공식 모델 | 비교 대상 | 재현 완료 ([docs/aihub_baseline.md](docs/aihub_baseline.md) · [docs/baseline_run.md](docs/baseline_run.md)) |
 
-```bash
-uv tool install google-colab-cli --with "jupyter-kernel-client==0.15.0"
-colab sessions          # 최초 1회 OAuth 인증 (브라우저에서 코드 받아 붙여넣기)
-```
+라이선스: Le2i·URFD 는 CC-BY-NC. 서비스 탑재 모델은 비상업 데이터를 빼고 학습해야 한다.
 
-의존성 버전 고정이 필요한 이유와 확인된 VM 사양은 [docs/setup.md](docs/setup.md) 참고.
+## Colab
 
-주요 명령:
-
-| 명령 | 용도 |
-|---|---|
-| `colab new -s <이름> [--gpu T4]` | 세션 생성 (`-s` 항상 지정) |
-| `colab exec -s <이름> -f script.py` | 로컬 스크립트를 VM에서 실행 |
-| `colab run --gpu T4 script.py` | 생성 → 실행 → 자동 해제 (일회성) |
-| `colab upload / download` | 파일 전송 |
-| `colab log -s <이름> -o out.ipynb` | 세션 기록을 노트북으로 내보내기 |
-| `colab stop -s <이름>` | **종료 (필수)** |
-
-### 주의
-
-- **세션은 반드시 `colab stop`** — 방치하면 컴퓨팅 유닛이 24시간까지 계속 소진된다.
-- 커널 상태는 `exec` 호출 간 유지된다. 매번 import를 반복할 필요 없다.
-- 기본 작업 디렉토리는 `/content`. 절대경로를 쓴다.
-- GPU 할당은 계정 등급에 따라 제한된다. 400 에러면 T4로 낮추거나 CPU로 돌린다.
-- `drivemount`, `auth`, `repl`, `console` 은 TTY가 필요해 사람이 직접 실행해야 한다.
-- 데이터 탐색·전처리는 CPU 세션으로 — GPU 유닛을 아낀다.
+학습은 Colab T4 에서 했다. CLI 설치와 의존성 함정은 [docs/setup.md](docs/setup.md).
+세션이 예고 없이 회수되므로 **중간 산출물은 Drive 에 바로 쓴다** — 이 원칙이 없어 세 번 잃었다.

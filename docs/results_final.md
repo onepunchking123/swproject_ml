@@ -4,7 +4,7 @@ _2026-09-22 · OmniFall 1,193클립 · risk 3클래스_
 
 edf 자르기 오류를 수정한 뒤 STEP 1~3 을 재실행한 결과다.
 **논문에 인용할 수치는 이 문서의 것이다.** 오염 상태의 이전 수치는
-[results_step2.md](results_step2.md)·[results_step3.md](results_step3.md)에
+[archive/results_step2.md](archive/results_step2.md)·[archive/results_step3.md](archive/results_step3.md)에
 기록만 남긴다.
 
 ## 데이터 정제가 결과를 바꿨다
