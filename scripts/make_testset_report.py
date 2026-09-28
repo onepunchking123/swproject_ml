@@ -13,7 +13,7 @@ AI Hub 샘플 보고서와 목적이 다르다.
 
 사용법:
     python make_testset_report.py --kps kps.npz --manifest manifest.csv \
-        --model runs/models/gru.pt --root <영상루트> --out runs/report
+        --model models/gru.pt --root <영상루트> --out runs/report
 """
 from __future__ import annotations
 import argparse, base64, collections, csv, html, json

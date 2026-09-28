@@ -144,7 +144,7 @@ def main() -> int:
                     help="영상 파일 경로, 또는 data/ 아래에서 찾을 파일명 (예: 00003_H_A_FY_C1)")
     ap.add_argument("--data-root", type=Path, default=Path("data"),
                     help="--source 가 경로가 아닐 때 검색할 루트")
-    ap.add_argument("--model", type=Path, default=Path("runs/models/gru.pt"))
+    ap.add_argument("--model", type=Path, default=Path("models/gru.pt"))
     ap.add_argument("--pose", default="yolo11n-pose.pt")
     ap.add_argument("--device", default="auto", help="auto|mps|cuda|cpu")
     ap.add_argument("--resize", type=int, default=960, help="가로 픽셀 (0=원본)")

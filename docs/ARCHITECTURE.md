@@ -120,7 +120,7 @@ YOLO 는 각 순간의 자세를 숫자로 바꾸는 센서 역할이고, 행동
 | 1인 선택 | 가장 큰 박스 | `scripts/realtime_demo.py` `largest_person()` | (N,17,3) → (17,3) |
 | **정규화** | 카메라 불변 표현 | `scripts/pipeline_core.py` `normalize()` | (T,17,3) 픽셀 → 몸통 단위 |
 | 리샘플 | 고정 길이 | `pipeline_core.py` `resample()` | (T,17,3) → (64,17,3) |
-| 분류 | 프레임 상태 | `runs/models/gru.pt` · `pipeline_core.py` `build_model()` | (64,17,3) → 3 확률 |
+| 분류 | 프레임 상태 | `models/gru.pt` · `pipeline_core.py` `build_model()` | (64,17,3) → 3 확률 |
 | 상태 결정 | 히스테리시스 | `realtime_demo.py` 판정 블록 | 확률 → 상태 |
 | **미동 감지** | 시간 누적 규칙 | `realtime_demo.py` `ImmobilityDetector` | 상태 시계열 → 이벤트 |
 | 출력 | 오버레이·기록 | `realtime_demo.py` `draw()` | 프레임 + 상태 → mp4 · jsonl |
@@ -157,27 +157,29 @@ YOLO 는 각 순간의 자세를 숫자로 바꾸는 센서 역할이고, 행동
 - **사람 미검출(전부 0) 입력에 모델이 `fallen` 0.79 를 낸다.** 화면에서 사람이 사라지면
   "넘어져 있다" 로 오판하므로, 검출률 < `min_det` 윈도우는 GRU 를 돌리지 않고 `no_person` 으로 둔다.
 
-## 모델 카드 — `runs/models/gru.pt`
+## 모델 카드 — `models/gru.pt`
 
 | 항목 | 값 |
 |---|---|
 | 구조 | GRU 2층 × 128 hidden → Dropout 0.3 → Linear(128, 3) |
-| 파라미터 | 약 169K |
-| 입력 | (64, 17, 3) — 64프레임 리샘플, COCO 17, (x, y, conf) 정규화 좌표 |
+| 파라미터 | 약 182K |
+| 입력 | (64, 17, **5**) — 64프레임 리샘플, COCO 17, (x, y, conf, **Δx, Δy**) 정규화 좌표 + 초당 속도 (`posvel`) |
 | 출력 | softmax 3 — `normal` · `fall` · `fallen` |
 | 학습 데이터 | OmniFall staged 3종 (GMDCSA24 453 · edf 483 · caucafall 258) = 1,193 클립 · 피험자 19명 |
 | 클래스 매핑 | fall=1 → `fall` · fallen=2 → `fallen` · 나머지 8클래스 → `normal` |
 | 손실 | CrossEntropy + 클래스 가중치(빈도 역수 √) + label smoothing 0.05 |
 | 모델 선택 | val **Recall** 기준 (accuracy 아님) · early stop patience 15 |
-| 5-fold (피험자 단위, 이진 위험 기준) | Recall **0.867 ± 0.066** · FPR **0.112 ± 0.066** · fallen 포착 **73.7%** |
-| 환경 교차 (leave-one-out 3회) | Recall 0.832 · FPR 0.205 |
+| 5-fold (피험자 단위, 이진 위험 기준) | Recall **0.860 ± 0.026** · FPR **0.131 ± 0.077** · fallen 포착 **74%** |
+| 환경 교차 (leave-one-out 3회) | Recall 0.739 · FPR 0.195 |
+| AI Hub 통짜 영상 (32) | 낙상 Recall **0.917** · 비낙상 위험 윈도우 비율 **0.162** · 3초 지속(R1) 1/8 카메라 |
 
-gru 를 고른 이유: bilstm 과 `fallen` 포착률이 같고(73.7%) FPR 이 가장 낮으며 파라미터가 1/3 이다.
-lstm 은 Recall 0.891 로 가장 높지만 `fallen` 을 47.5% 밖에 못 잡아 "넘어진 뒤 방치" 목표에 약하다.
-([results_final.md](results_final.md))
+속도 채널을 넣은 이유와 결과는 [results_velocity.md](results_velocity.md). 클립 5-fold 는 좌표만 쓸 때와
+평균이 같고 분산만 줄지만, 전이가 보이는 통짜 영상에서는 비낙상 위험 윈도우가 0.346 → 0.162 로 준다.
+bilstm 은 클립 지표는 더 좋지만 통짜 영상 오경보가 가장 많아 제외했다. 좌표만 쓴 이전 모델은
+`models/gru_pos.pt` 로 남겨 뒀다 (이전 수치: [results_final.md](results_final.md)).
 
 **학습 데이터의 알려진 편향** — `lying`(침대에 누움) 이 23개(1.9%)뿐이다. 모델이 수평 자세를
-위험으로 배워, 침대에 엎드리는 장면을 낙상으로 오판한다. AI Hub 비낙상 샘플 FPR 0.750 의 원인이다.
+위험으로 배워, 침대에 엎드리는 장면을 낙상으로 오판한다. 속도 채널로 줄였지만 없애지는 못했다 — C2 카메라는 여전히 4.5초 지속된다.
 
 ## 미동 감지 규칙 — `ImmobilityDetector`
 
@@ -248,7 +250,7 @@ docs/
 ```bash
 ./venv_aihub/bin/python scripts/realtime_demo.py --source 00003_H_A_FY_C1   # data/ 아래에서 이름으로 찾음
 ./venv_aihub/bin/python scripts/realtime_demo.py \
-  --source <영상.mp4> --model runs/models/gru.pt \
+  --source <영상.mp4> --model models/gru.pt \
   --save-video runs/demo/out.mp4 --events runs/demo/out.jsonl \
   [--gt-json <AI Hub 라벨.json>]      # 정답 구간 오버레이 (data/ 에 같은 이름 json 이 있으면 자동)
   [--no-display]                      # 화면 없이 저장만

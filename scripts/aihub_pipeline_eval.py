@@ -11,7 +11,7 @@ AI Hub 라벨에는 `fall_start_frame`/`fall_end_frame` 이 있으므로 감지 
 불가능한 평가다.
 
 사용법:
-    python aihub_pipeline_eval.py --sample <샘플루트> --model runs/models/gru.pt \
+    python aihub_pipeline_eval.py --sample <샘플루트> --model models/gru.pt \
         --out runs/aihub_sample
 """
 from __future__ import annotations

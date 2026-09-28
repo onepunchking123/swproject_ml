@@ -1,6 +1,6 @@
 # 프로젝트 현황 총정리
 
-_2026-09-24 기준_
+_2026-09-24 기준 · **2026-09-28 갱신**: 배포 모델을 속도 채널(posvel) gru 로 교체 — 아래 수치는 교체 전 기록이며 최신 수치는 [results_velocity.md](results_velocity.md) · [ARCHITECTURE.md](ARCHITECTURE.md) 모델 카드_
 
 ## 한 줄 요약
 
@@ -83,7 +83,7 @@ other 10.8% · sitting 7.8% · sit_down 3.2% · lying 1.9% · lie_down 1.8%
 
 | 종류 | 위치 |
 |---|---|
-| 학습 모델 | `runs/models/gru.pt`, `bilstm.pt` |
+| 학습 모델 | `models/gru.pt` (posvel) · `models/gru_pos.pt` (좌표만, 비교용) |
 | 결과 JSON | `runs/trim/`, `runs/stage2/` |
 | **시각 보고서** | `runs/report/pipeline_aihub.pdf` (프레임+확률 시계열) |
 | 베이스라인 보고서 | `runs/report/fnf_report.pdf`, `fd_report.pdf` |
