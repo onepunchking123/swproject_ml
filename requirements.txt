@@ -1,0 +1,22 @@
+# 데모·학습·평가 실행 환경 (Python 3.11 에서 검증, macOS M3 / Linux 공통)
+#   python3.11 -m venv venv && source venv/bin/activate && pip install -r requirements.txt
+#
+# 순서·버전 고정 이유: mediapipe 1.x 는 mp.solutions 를 제거했고, numpy 2.x 는 scikit-learn 1.3 과
+# ABI 가 깨진다. AI Hub 베이스라인 재현(aihub_infer.py)에만 mediapipe/scikit-learn 이 필요하므로
+# 데모만 돌린다면 아래 [baseline] 두 줄은 빼도 된다.
+
+torch==2.14.0
+ultralytics==8.4.158          # yolo11n-pose.pt 자동 다운로드. AGPL-3.0 (docs/ISSUES.md 12번)
+opencv-python==4.11.0.86
+numpy==1.26.4
+pyyaml==6.0.3
+pillow==12.3.0
+matplotlib==3.11.2
+
+# [report] 보고서 PDF (make_*_report.py). weasyprint 는 macOS: brew install pango / Ubuntu: apt install libpango-1.0-0
+weasyprint==70.0
+markdown==3.10.3
+
+# [baseline] AI Hub 공식 RandomForest 재현 (aihub_infer.py) — 데모에는 불필요
+scikit-learn==1.3.2
+mediapipe==0.10.14

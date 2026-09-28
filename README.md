@@ -15,9 +15,29 @@
 ./venv_aihub/bin/python scripts/realtime_demo.py --source 00003_H_A_FY_C1
 ```
 
-데모 영상은 `data/aihub_sample/` 에 있어야 한다 (git 제외 — AI Hub 재배포 금지, 팀 Drive 에서 받는다).
+```bash
+python3.11 -m venv venv && source venv/bin/activate && pip install -r requirements.txt
+```
+
+데모 영상은 `data/aihub_sample/` 에 있어야 한다 (git 제외 — AI Hub 재배포 금지). 아래 **팀 Drive** 에서 받는다.
 이름만 주면 찾고 같은 이름의 정답 라벨도 자동으로 붙는다. 창에 골격·상태·확률·FPS·알림 배너가 뜬다. `q` 로 종료.
-임의 영상은 `--source path/to/clip.mp4`. 환경 구성은 [docs/how_to_run.md](docs/how_to_run.md).
+임의 영상은 `--source path/to/clip.mp4`. 상세는 [docs/how_to_run.md](docs/how_to_run.md).
+
+### 팀 Drive — git 에 없는 데이터
+
+📁 **[falldata (Google Drive)](https://drive.google.com/drive/folders/1bgFi-Fg1-j8DAMG7fFPNnPsP4XqbxZph?usp=drive_link)** — 팀 내부 공유. 외부 재배포 금지 (AI Hub 이용약관).
+
+| Drive 경로 | 받을 위치 | 용량 | 용도 |
+|---|---|---|---|
+| `aihub_sample/` | `data/aihub_sample/` | 897MB | **데모·평가 영상 32 + 라벨** — 데모에 필수 |
+| `kps_trim.npz` · `manifest_full.csv` | `runs/kps/` | 20MB | 재학습용 키포인트 (영상 없이 `train_stage2.py` 실행 가능) |
+| `omnifall/` `omnifall_syn/` `fallvision/` `urfd/` | (선택) | 60GB | 원본 영상 zip — 키포인트 재추출·데이터 확장할 때만 |
+| `models/` `runs_trim/` | (선택) | — | Colab 학습 산출물 원본 |
+
+```bash
+# 예: 데모 영상만 받기 (rclone 이 있으면)
+rclone copy gdrive:falldata/aihub_sample data/aihub_sample
+```
 
 | 장면 | 이름 | 정답 낙상 | 데모 결과 (models/gru.pt) |
 |---|---|---|---|
@@ -131,13 +151,14 @@ docs/
 docs/archive/             계획서 · 중간 결과 (참고용)
 
 configs/datasets.yaml     공개 데이터셋 레지스트리 (URL · 라이선스 · 구조)
+requirements.txt          실행 환경 (Python 3.11)
 data/aihub_sample/        데모·평가 영상 32 + 라벨       (git 제외)
 runs/                     학습 결과 · 데모 출력 · 보고서 · 캐시  (git 제외)
 aihub_model/              AI Hub 공식 모델 100MB          (git 제외)
 ```
 
-**git 에 없는 것을 받는 법** — `data/aihub_sample/`, `runs/kps/kps_trim.npz`(학습용 키포인트 20MB) 는 팀 Drive `falldata/`.
-`yolo11n-pose.pt` 는 첫 실행 시 ultralytics 가 자동 다운로드.
+**git 에 없는 것** — 위 "팀 Drive" 표. `yolo11n-pose.pt` 는 첫 실행 시 ultralytics 가 자동 다운로드.
+`requirements.txt` 로 환경을 만든다 (Python 3.11).
 
 ---
 
