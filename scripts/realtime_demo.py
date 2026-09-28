@@ -33,7 +33,7 @@ import cv2
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent))
-from pipeline_core import (SKELETON, normalize, resample, torso_horizontality,
+from pipeline_core import (SKELETON, featurize, normalize, resample, torso_horizontality,
                            motion_energy, detection_rate, pick_device, load_checkpoint)
 
 STATE_COLOR = {"normal": (80, 200, 80), "fall": (0, 100, 255), "fallen": (0, 0, 230),
@@ -169,10 +169,10 @@ def main() -> int:
     import torch
     from ultralytics import YOLO
     dev = pick_device(args.device)
-    model, classes, seq_len, kind = load_checkpoint(args.model, dev)
+    model, classes, seq_len, kind, feat = load_checkpoint(args.model, dev)
     pose = YOLO(args.pose)
     fi = classes.index("fall"); fli = classes.index("fallen")
-    print(f"[*] {kind} · {classes} · seq {seq_len} · device {dev}")
+    print(f"[*] {kind} · {classes} · seq {seq_len} · 입력 {feat} · device {dev}")
 
     # --source 가 파일이 아니면 data/ 아래에서 <이름>.mp4 를 찾는다. 데모 영상을 프로젝트
     # 안에 두고 긴 경로 없이 이름만으로 돌리기 위해서다.
@@ -247,7 +247,7 @@ def main() -> int:
             if detection_rate(win) < args.min_det:
                 state, prob = "no_person", np.zeros(len(classes), np.float32)
             else:
-                x = torch.tensor(resample(win, seq_len)[None]).to(dev)
+                x = torch.tensor(resample(featurize(win, src_fps, feat), seq_len)[None]).to(dev)
                 with torch.no_grad():
                     prob = torch.softmax(model(x), 1).cpu().numpy()[0]
                 risk = prob[fi] + prob[fli]

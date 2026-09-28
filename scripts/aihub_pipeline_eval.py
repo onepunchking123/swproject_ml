@@ -19,77 +19,9 @@ import argparse, json, re, time
 from pathlib import Path
 import numpy as np
 
-L_SH, R_SH, L_HIP, R_HIP = 5, 6, 11, 12
-
-
-def normalize(kps: np.ndarray, w: int, h: int) -> np.ndarray:
-    """extract_keypoints.py 와 동일한 카메라 불변 정규화."""
-    out = kps.copy().astype(np.float32)
-    out[..., 0] /= max(w, 1)
-    out[..., 1] /= max(h, 1)
-    conf = out[..., 2:3]
-    hip = (out[:, L_HIP, :2] + out[:, R_HIP, :2]) / 2
-    sho = (out[:, L_SH, :2] + out[:, R_SH, :2]) / 2
-    torso = np.linalg.norm(sho - hip, axis=-1, keepdims=True)
-    torso = np.where(torso < 1e-3, 1.0, torso)
-    out[..., :2] = (out[..., :2] - hip[:, None, :]) / torso[:, None, :]
-    out[..., 2:3] = conf
-    return out
-
-
-def resample(seq: np.ndarray, n: int) -> np.ndarray:
-    idx = np.linspace(0, seq.shape[0] - 1, n)
-    lo, hi = np.floor(idx).astype(int), np.ceil(idx).astype(int)
-    w = (idx - lo)[:, None, None]
-    return (seq[lo] * (1 - w) + seq[hi] * w).astype(np.float32)
-
-
-def build_model(kind, K, dev):
-    import torch, torch.nn as nn
-    class CNN1D(nn.Module):
-        def __init__(s):
-            super().__init__()
-            s.net = nn.Sequential(
-                nn.Conv1d(51,128,5,padding=2), nn.BatchNorm1d(128), nn.ReLU(),
-                nn.Conv1d(128,128,5,padding=2), nn.BatchNorm1d(128), nn.ReLU(),
-                nn.AdaptiveAvgPool1d(1), nn.Flatten(), nn.Dropout(0.3), nn.Linear(128,K))
-        def forward(s,x): return s.net(x.flatten(2).transpose(1,2))
-    class RNN(nn.Module):
-        def __init__(s, cell, bi=False, attn=False):
-            super().__init__()
-            s.rnn = cell(51,128,2,batch_first=True,bidirectional=bi,dropout=0.3)
-            s.attn, d = attn, 128*(2 if bi else 1)
-            if attn: s.a = nn.Linear(d,1)
-            s.fc = nn.Sequential(nn.Dropout(0.3), nn.Linear(d,K))
-        def forward(s,x):
-            o,_ = s.rnn(x.flatten(2))
-            if s.attn:
-                w = torch.softmax(s.a(o),1); return s.fc((o*w).sum(1))
-            return s.fc(o[:,-1])
-    class STGCN(nn.Module):
-        E = [(0,1),(0,2),(1,3),(2,4),(0,5),(0,6),(5,6),(5,7),(7,9),(6,8),(8,10),
-             (5,11),(6,12),(11,12),(11,13),(13,15),(12,14),(14,16)]
-        def __init__(s):
-            super().__init__()
-            A = torch.eye(17)
-            for i,j in s.E: A[i,j]=A[j,i]=1
-            s.register_buffer("A", A/A.sum(1,keepdim=True))
-            s.gc1, s.bn1 = nn.Linear(3,64), nn.BatchNorm2d(64)
-            s.tc1 = nn.Conv2d(64,64,(5,1),padding=(2,0))
-            s.gc2, s.bn2 = nn.Linear(64,128), nn.BatchNorm2d(128)
-            s.tc2 = nn.Conv2d(128,128,(5,1),stride=(2,1),padding=(2,0))
-            s.bn3 = nn.BatchNorm2d(128)
-            s.fc = nn.Sequential(nn.Dropout(0.3), nn.Linear(128,K))
-        def _blk(s,x,gc,bn,tc):
-            h = torch.relu(gc(torch.einsum("ij,btjc->btic", s.A, x)))
-            h = h.permute(0,3,1,2); h = torch.relu(bn(tc(h)))
-            return h.permute(0,2,3,1)
-        def forward(s,x):
-            h = s._blk(x, s.gc1, s.bn1, s.tc1)
-            h = s._blk(h, s.gc2, s.bn2, s.tc2)
-            return s.fc(s.bn3(h.permute(0,3,1,2)).mean((2,3)))
-    return {"cnn1d":CNN1D, "lstm":lambda: RNN(nn.LSTM), "gru":lambda: RNN(nn.GRU),
-            "bilstm":lambda: RNN(nn.LSTM,bi=True,attn=True), "stgcn":STGCN}[kind]().to(dev)
+import sys
+sys.path.insert(0, str(Path(__file__).parent))
+from pipeline_core import build_model, featurize, normalize, pick_device, resample  # noqa: F401 (re-export)
 
 
 def main() -> int:
@@ -107,13 +39,13 @@ def main() -> int:
 
     import torch, cv2
     from ultralytics import YOLO
-    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    dev = pick_device()
 
     ck = torch.load(args.model, map_location=dev, weights_only=False)
-    names, seq_len = ck["classes"], ck["seq_len"]
-    model = build_model(ck["kind"], len(names), dev)
+    names, seq_len, feat = ck["classes"], ck["seq_len"], ck.get("feat", "pos")
+    model = build_model(ck["kind"], len(names), dev, ck.get("in_ch", 3))
     model.load_state_dict(ck["state_dict"]); model.eval()
-    print(f"[*] 모델 {ck['kind']} · 클래스 {names} · seq {seq_len} · {dev}")
+    print(f"[*] 모델 {ck['kind']} · 클래스 {names} · seq {seq_len} · 입력 {feat} · {dev}")
 
     vids = sorted((args.sample / "01.원천데이터" / "영상").rglob("*.mp4"))
     labels = {}
@@ -129,10 +61,12 @@ def main() -> int:
     for i, v in enumerate(vids, 1):
         sid = v.stem
         cache = args.kps_cache / f"{sid}.npy"
+        cap = cv2.VideoCapture(str(v))
+        fps = cap.get(cv2.CAP_PROP_FPS) or 60.0
         if cache.exists():
+            cap.release()
             seq = np.load(cache)
         else:
-            cap = cv2.VideoCapture(str(v))
             w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)); h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             frames = []
             while True:
@@ -155,7 +89,8 @@ def main() -> int:
             seq = normalize(raw, w, h)
             np.save(cache, seq)
 
-        # 슬라이딩 윈도우 추론
+        # 슬라이딩 윈도우 추론 — 캐시는 정규화 좌표 3채널이므로 속도는 여기서 붙인다
+        seq = featurize(seq, fps, feat)
         T = seq.shape[0]
         starts = list(range(0, max(1, T - args.window + 1), args.stride))
         wins = np.stack([resample(seq[s:s+args.window], seq_len) for s in starts])

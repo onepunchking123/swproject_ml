@@ -61,15 +61,15 @@ def main() -> int:
     import sys
     sys.path.insert(0, str(Path(__file__).parent))
     from train_stage2 import load, TASKS
-    from aihub_pipeline_eval import build_model
+    from pipeline_core import build_model, pick_device
 
-    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    dev = pick_device()
     ck = torch.load(args.model, map_location=dev, weights_only=False)
-    names, seq_len = ck["classes"], ck["seq_len"]
-    model = build_model(ck["kind"], len(names), dev)
+    names, seq_len, feat = ck["classes"], ck["seq_len"], ck.get("feat", "pos")
+    model = build_model(ck["kind"], len(names), dev, ck.get("in_ch", 3))
     model.load_state_dict(ck["state_dict"]); model.eval()
 
-    X, y, groups, cams, dsets, _ = load(args.kps, args.manifest, seq_len, "risk")
+    X, y, groups, cams, dsets, _ = load(args.kps, args.manifest, seq_len, "risk", feat)
     # 피험자 단위 test split — train_stage2 와 같은 seed
     rng = np.random.default_rng(0)
     uniq = np.array(sorted(set(groups))); rng.shuffle(uniq)
