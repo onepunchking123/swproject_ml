@@ -6,7 +6,7 @@ _2026-09-24 · 프로토타입 기준_
 
 ```
                          ┌─────────────── 학습 경로 (오프라인, Colab) ───────────────┐
-  OmniFall 영상 ──► extract_keypoints.py ──► (T,17,3) .npy ──► retrim/pack ──► train_stage2.py ──► gru.pt
+  OmniFall 영상 ──► extract_keypoints.py ──► (T,17,3) .npy ──► retrim/pack ──► train_stage2.py --feat posvel ──► gru.pt
                     YOLOv11n-pose + 정규화                     kps_trim.npz      5-fold · LOO
                          └────────────────────────────────────────────────────────────┘
 
@@ -119,7 +119,8 @@ YOLO 는 각 순간의 자세를 숫자로 바꾸는 센서 역할이고, 행동
 | 자세 추정 | 사람 검출 + COCO 17 키포인트 | `yolo11n-pose.pt` (ultralytics) | 프레임 → (N, 17, 3) 픽셀 |
 | 1인 선택 | 가장 큰 박스 | `scripts/realtime_demo.py` `largest_person()` | (N,17,3) → (17,3) |
 | **정규화** | 카메라 불변 표현 | `scripts/pipeline_core.py` `normalize()` | (T,17,3) 픽셀 → 몸통 단위 |
-| 리샘플 | 고정 길이 | `pipeline_core.py` `resample()` | (T,17,3) → (64,17,3) |
+| **속도 채널** | 변화량 추가 | `pipeline_core.py` `add_velocity()` | (T,17,3) → (T,17,5) — (Δx,Δy)·fps/10 |
+| 리샘플 | 고정 길이 | `pipeline_core.py` `resample()` | (T,17,5) → (64,17,5) |
 | 분류 | 프레임 상태 | `models/gru.pt` · `pipeline_core.py` `build_model()` | (64,17,3) → 3 확률 |
 | 상태 결정 | 히스테리시스 | `realtime_demo.py` 판정 블록 | 확률 → 상태 |
 | **미동 감지** | 시간 누적 규칙 | `realtime_demo.py` `ImmobilityDetector` | 상태 시계열 → 이벤트 |
