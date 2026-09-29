@@ -29,14 +29,14 @@ python3.11 -m venv venv && source venv/bin/activate && pip install -r requiremen
 
 | Drive 경로 | 받을 위치 | 용량 | 용도 |
 |---|---|---|---|
-| `aihub_sample/` | `data/aihub_sample/` | 897MB | **데모·평가 영상 32 + 라벨** — 데모에 필수 |
+| `aihub_sample.zip` | `data/` 에서 압축 해제 → `data/aihub_sample/` | 895MB | **데모·평가 영상 32 + 라벨** — 데모에 필수 |
 | `kps_trim.npz` · `manifest_full.csv` | `runs/kps/` | 20MB | 재학습용 키포인트 (영상 없이 `train_stage2.py` 실행 가능) |
 | `omnifall/` `omnifall_syn/` `fallvision/` `urfd/` | (선택) | 60GB | 원본 영상 zip — 키포인트 재추출·데이터 확장할 때만 |
 | `models/` `runs_trim/` | (선택) | — | Colab 학습 산출물 원본 |
 
 ```bash
-# 예: 데모 영상만 받기 (rclone 이 있으면)
-rclone copy gdrive:falldata/aihub_sample data/aihub_sample
+# 브라우저로 aihub_sample.zip 을 받아 data/ 에 풀거나, rclone 이 있으면:
+rclone copyto gdrive:falldata/aihub_sample.zip data/aihub_sample.zip && unzip -q data/aihub_sample.zip -d data/
 ```
 
 | 장면 | 이름 | 정답 낙상 | 데모 결과 (models/gru.pt) |
