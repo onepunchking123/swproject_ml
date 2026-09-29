@@ -146,7 +146,8 @@ docs/
   results_aihub_pipeline.md  AI Hub 샘플 평가 · 카메라 편차 · FPR 원인
   aihub_baseline.md / baseline_run.md  AI Hub 공식 모델 분석·재현
   dataset_candidates.md   데이터셋 후보와 우선순위
-  how_to_run.md / setup.md  환경 구성 · Colab CLI 함정
+  how_to_run.md           팀원용 실행 가이드: 환경 · 데이터 받기 · 데모 · 평가 · 재학습
+  setup.md                Colab CLI · Drive · rclone 함정 (학습 인프라 메모)
   SUMMARY.md              경과 총정리 (9-24 기준)
 docs/archive/             계획서 · 중간 결과 (참고용)
 

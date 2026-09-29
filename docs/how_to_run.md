@@ -1,291 +1,153 @@
-# 실행 방법
+# 팀원용 실행 가이드
 
-AI Hub 공식 영상 모델(RandomForest) 베이스라인 추론을 돌리는 절차.
+clone 부터 데모 → 평가 → 재학습까지. 모든 명령은 저장소 루트에서 실행한다.
 
-## 0. 준비 — 처음 한 번만
+## 0. 환경 (처음 한 번)
 
-### 작업 폴더로 이동
-
-```bash
-cd ~/Documents/fall-detection
-```
-
-앞으로 **모든 명령은 이 폴더에서** 실행한다.
-
-### 가상환경 만들기
+Python **3.11** 이 필요하다 (3.12 이상은 mediapipe 0.10 휠이 없다 — 데모만 돌리면 상관없다).
 
 ```bash
-uv venv --python 3.11 venv_aihub
+git clone https://github.com/onepunchking123/swproject_ml.git fall-detection && cd fall-detection
 ```
 
 ```bash
-uv pip install --python venv_aihub/bin/python "scikit-learn==1.3.2" "mediapipe==0.10.14" opencv-python joblib
+python3.11 -m venv venv && source venv/bin/activate && pip install -r requirements.txt
 ```
+
+`requirements.txt` 는 세 묶음이다 — 데모용 / 보고서 PDF 용(weasyprint) / AI Hub 베이스라인 재현용(mediapipe·scikit-learn).
+데모만 볼 거면 아래 두 묶음은 주석 처리해도 된다. weasyprint 는 시스템 라이브러리가 필요하다:
+macOS `brew install pango` · Ubuntu `sudo apt install libpango-1.0-0 libpangoft2-1.0-0`.
+
+확인:
 
 ```bash
-uv pip install --python venv_aihub/bin/python "numpy==1.26.4"
+python -c "import torch, ultralytics, cv2; print(torch.__version__, 'mps' if torch.backends.mps.is_available() else ('cuda' if torch.cuda.is_available() else 'cpu'))"
 ```
 
-**numpy 설치는 반드시 마지막에, 따로 실행한다.** mediapipe 가 numpy 2.x 를
-끌어오는데 그러면 scikit-learn 이 `numpy.dtype size changed` 오류로 깨진다.
+GPU 가 없어도 CPU 로 돈다 (데모 약 10 FPS).
 
-### 설치 확인
+## 1. 데이터 받기 (팀 Drive)
 
-```bash
-./venv_aihub/bin/python -c "import numpy,sklearn,mediapipe,cv2,joblib; print(numpy.__version__, sklearn.__version__, mediapipe.__version__)"
-```
+📁 [falldata](https://drive.google.com/drive/folders/1bgFi-Fg1-j8DAMG7fFPNnPsP4XqbxZph?usp=drive_link) — 팀 내부 공유. **외부 재배포 금지** (AI Hub 이용약관).
 
-`1.26.4 1.3.2 0.10.14` 가 나와야 한다.
-
-## 1. 추론 실행
-
-### 낙상유무 탐지 (FNF) — 2분류
-
-```bash
-cd ~/Documents/fall-detection && ./venv_aihub/bin/python scripts/aihub_infer.py --data "/Users/mymoon/Downloads/Sample 2/01.원천데이터/영상" --models "/Users/mymoon/Downloads/낙상사고 위험동작 영상-센서 쌍 데이터/1.모델/2. AI학습모델파일/영상" --task fnf
-```
-
-### 낙상유형 분류 (FD) — 3분류
-
-```bash
-cd ~/Documents/fall-detection && ./venv_aihub/bin/python scripts/aihub_infer.py --data "/Users/mymoon/Downloads/Sample 2/01.원천데이터/영상" --models "/Users/mymoon/Downloads/낙상사고 위험동작 영상-센서 쌍 데이터/1.모델/2. AI학습모델파일/영상" --task fd
-```
-
-FD 는 낙상 유형(전면/후면/측면)만 구분하므로 비낙상(N) 영상은 자동 제외된다.
-
-### 빠르게 확인만 하고 싶을 때
-
-```bash
-cd ~/Documents/fall-detection && ./venv_aihub/bin/python scripts/aihub_infer.py --data "/Users/mymoon/Downloads/Sample 2/01.원천데이터/영상" --models "/Users/mymoon/Downloads/낙상사고 위험동작 영상-센서 쌍 데이터/1.모델/2. AI학습모델파일/영상" --task fnf --limit 4
-```
-
-`--limit 4` 는 영상 4개만 처리한다. 전체는 약 9분, 4개는 약 1분.
-
-### 시간이 오래 걸릴 때 (백그라운드)
-
-```bash
-cd ~/Documents/fall-detection && nohup ./venv_aihub/bin/python scripts/aihub_infer.py --data "/Users/mymoon/Downloads/Sample 2/01.원천데이터/영상" --models "/Users/mymoon/Downloads/낙상사고 위험동작 영상-센서 쌍 데이터/1.모델/2. AI학습모델파일/영상" --task fnf > runs/fnf.log 2>&1 &
-```
-
-진행 상황 확인:
-
-```bash
-cd ~/Documents/fall-detection && ls runs/keypoints/*.npy | wc -l
-```
-
-처리된 영상 수가 나온다 (전체 32개).
-
-## 2. 옵션
-
-| 옵션 | 기본값 | 설명 |
+| 받을 것 | 놓을 곳 | 필요한 때 |
 |---|---|---|
-| `--data` | (필수) | 영상 루트. 하위 폴더를 재귀 탐색한다 |
-| `--models` | (필수) | `2. AI학습모델파일/영상` 경로 |
-| `--task` | `fnf` | `fnf`=낙상유무 2분류, `fd`=낙상유형 3분류 |
-| `--limit` | 전체 | 처리할 영상 수 제한 |
-| `--resize` | 960 | MediaPipe 입력 가로 크기. `0` 이면 4K 원본 (매우 느림) |
-| `--cache` | `runs/keypoints` | 키포인트 캐시 위치 |
-| `--out` | `runs/aihub_baseline` | 결과 저장 위치 |
-
-## 3. 결과가 저장되는 곳
-
-```
-~/Documents/fall-detection/
-└── runs/
-    ├── keypoints/                  ← 키포인트 캐시 (.npy)
-    │   ├── 00003_H_A_FY_C1.npy         영상당 약 4MB
-    │   └── ...                         32개 전부면 약 128MB
-    │
-    └── aihub_baseline/            ← 추론 결과
-        ├── fnf_results.json           낙상유무
-        └── fd_results.json            낙상유형
-```
-
-### 키포인트 캐시
-
-**한 번 추출하면 재사용된다.** 추출이 영상당 17초로 전체 시간의 대부분이므로,
-같은 영상을 다시 돌리면 즉시 끝난다. 로그에 `(캐시)` 로 표시된다.
-
-다시 추출하고 싶으면 지운다:
+| `aihub_sample.zip` (895MB) | `data/` 에 풀어서 `data/aihub_sample/` | 데모 · AI Hub 평가 |
+| `kps_trim.npz` · `manifest_full.csv` (20MB) | `runs/kps/` | 재학습 |
 
 ```bash
-rm -rf ~/Documents/fall-detection/runs/keypoints
+mkdir -p data runs/kps
+unzip -q ~/Downloads/aihub_sample.zip -d data/
+mv ~/Downloads/kps_trim.npz ~/Downloads/manifest_full.csv runs/kps/
 ```
 
-`.gitignore` 로 제외되어 GitHub 에는 올라가지 않는다.
+확인: `ls data/aihub_sample` 에 `01.원천데이터` `02.라벨링데이터` 가 보이면 된다.
 
-### 결과 JSON
+`yolo11n-pose.pt` 는 첫 실행 때 ultralytics 가 자동으로 받는다 (6MB).
 
-```json
-{
-  "task": "fnf",
-  "n": 32,
-  "accuracy": 0.875,
-  "results": [
-    {
-      "file": "00003_H_A_FY_C1",
-      "cam": 1,
-      "true": "FY",
-      "pred_idx": 0,
-      "pred": "FALL",
-      "prob": [0.83, 0.17]
-    }
-  ]
-}
+## 2. 데모 — 영상 하나 실시간 판정
+
+```bash
+python scripts/realtime_demo.py --source 00003_H_A_FY_C1
 ```
 
-| 필드 | 의미 |
+창이 뜨고 골격·상태(normal/fall/fallen/no_person)·확률·FPS 가 오버레이된다. 정답 낙상 구간이
+라벨에서 자동으로 붙어 화면에 표시된다. `q` 로 종료.
+
+| 이름 | 장면 | 기대 결과 |
+|---|---|---|
+| `00003_H_A_FY_C1` | 전면낙상 (4.3s) | FALL ≈5.3s → 3초 뒤 **FALLEN_IMMOBILE** (빨간 배너) |
+| `00015_H_A_SY_C1` | 측면낙상 (4.7s) | FALL ≈4.8s → FALLEN_IMMOBILE |
+| `00151_H_A_BY_C1` | 후면낙상 (6.3s) | FALL ≈6.8s → FALLEN_IMMOBILE |
+| `00047_H_A_N_C1` | 비낙상 (침대에 엎드림) | FALL 오탐 1회, CRITICAL 은 나지 않아야 함 |
+
+`_C1` 을 `_C2`~`_C8` 로 바꾸면 같은 장면의 다른 카메라다.
+
+자주 쓰는 옵션:
+
+```bash
+# 임의 영상 · 화면 없이 · 결과 영상과 이벤트 로그 저장
+python scripts/realtime_demo.py --source path/to/clip.mp4 --no-display --save-video out.mp4 --events out.jsonl
+```
+
+| 옵션 | 기본 | 뜻 |
+|---|---|---|
+| `--t-fallen` | 3.0 | R1: 위험 상태 몇 초 지속되면 CRITICAL (데모용 값. [ISSUES.md](ISSUES.md) 2번) |
+| `--thr` / `--thr-exit` | 0.5 / 0.35 | 위험 진입 / 해제 확률 (히스테리시스) |
+| `--min-det` | 0.5 | 윈도우 내 사람 검출률 미만이면 `no_person` |
+| `--device` | auto | `mps` · `cuda` · `cpu` |
+| `--model` | `models/gru.pt` | `models/gru_pos.pt` 로 바꾸면 속도 채널 없는 이전 모델 |
+
+`events.jsonl` 은 0.5초마다 한 줄(`state`, `prob`) + 이벤트 줄(`event`, `rule`). 규칙 변형을 시험할 때 YOLO 를 다시 돌리지 않고 이 파일만 재생하면 된다.
+
+## 3. 데모 보고서 (PDF)
+
+4영상을 저장 모드로 돌린 뒤 보고서를 만든다.
+
+```bash
+for s in 00003_H_A_FY_C1 00015_H_A_SY_C1 00151_H_A_BY_C1 00047_H_A_N_C1; do
+  python scripts/realtime_demo.py --source $s --no-display --save-video runs/demo/${s%%_H*}_C1.mp4 --events runs/demo/${s%%_H*}_C1.jsonl
+done
+python scripts/make_demo_report.py --pdf
+```
+
+→ `runs/report/demo_report.pdf` — 영상마다 상태 띠 · 위험 확률 곡선(정답 구간 음영) · 이벤트 시점 스냅샷.
+
+## 4. AI Hub 32영상 정량 평가
+
+```bash
+python scripts/aihub_pipeline_eval.py --sample data/aihub_sample --model models/gru.pt --out runs/aihub_sample
+python scripts/make_pipeline_report.py --pred runs/aihub_sample/predictions.json --sample data/aihub_sample --pdf
+```
+
+첫 실행은 YOLO 추출에 영상당 ~15초(MPS). 키포인트는 `runs/aihub_kps/` 에 캐시되어 두 번째부터는 수 초.
+→ `runs/report/pipeline_aihub.pdf` — 카메라별 판정, 낙상 Recall, 비낙상 FPR, 감지 지연.
+
+## 5. 재학습 (영상 없이, 키포인트 캐시로)
+
+```bash
+# 배포 모델과 같은 설정 — 피험자 5-fold
+python scripts/train_stage2.py --kps runs/kps/kps_trim.npz --manifest runs/kps/manifest_full.csv \
+    --model gru --feat posvel --kfold 5 --out runs/mine
+```
+
+M3 MPS 에서 fold 당 20초. 결과는 `runs/mine/results_risk_kfold5_posvel.json` (fold 별 혼동행렬 포함).
+
+| 옵션 | 뜻 |
 |---|---|
-| `file` | 영상 파일명 |
-| `cam` | 카메라 번호 (1~8) — 어느 모델을 썼는지 |
-| `true` | 실제 라벨 (FY/BY/SY/N) |
-| `pred` | 예측 (FALL/NonFall 또는 BY/FY/SY) |
-| `prob` | 클래스별 확률 |
+| `--model gru\|lstm\|bilstm\|cnn1d\|stgcn\|rule` · `--all` | 모델 선택 |
+| `--feat pos\|posvel` | 좌표 3채널 / 좌표+속도 5채널 |
+| `--kfold 5` · `--loo-dataset` | 피험자 5-fold / 데이터셋 하나를 통째로 test |
+| `--save-model DIR` | 가중치 저장 (`DIR/gru.pt`). 데모에 `--model DIR/gru.pt` 로 바로 쓸 수 있다 |
 
-## 4. 화면에 나오는 것
+같은 실행을 다시 하면 끝난 조합은 건너뛴다 (결과 파일 증분 저장).
 
-```
-[*] task=fnf  영상 32개  모델 낙상분류
-  [1/32] 00003_H_A_FY_C1  cam=C1  true=FY  (17초)
-  [2/32] 00003_H_A_FY_C2  cam=C2  true=FY  (캐시)
-  ...
-[*] 키포인트 추출 완료 (540초)
-
-[*] C1: 4개 추론 완료
-...
-
-파일                          cam     실제        예측         확률
---------------------------------------------------------------------
-00003_H_A_FY_C1              C1     FY       FALL      0.83 0.17
-...
---------------------------------------------------------------------
-정확도: 28/32 = 87.5%
-
-Confusion matrix (행=실제, 열=예측)
-              FALL   NonFall
-      FALL      22         2
-   NonFall       2         6
-
-결과 저장: runs/aihub_baseline/fnf_results.json
-```
-
-## 5. 다른 데이터로 돌리기
-
-`--data` 만 바꾸면 된다. 조건은 두 가지다.
-
-- **영상이 600프레임 이상**이어야 한다. 미만이면 건너뛴다
-- **파일명에 `_C1` ~ `_C8`** 이 있어야 카메라 모델을 고를 수 있다
-
-Validation 원천데이터(VS.zip) 를 받으면:
+배포 모델을 바꾸려면 단일 split 로 학습해 저장하고 `models/gru.pt` 를 덮어쓴다:
 
 ```bash
-cd ~/Documents/fall-detection && ./venv_aihub/bin/python scripts/aihub_infer.py --data /Volumes/외장하드/VS --models "/Users/mymoon/Downloads/낙상사고 위험동작 영상-센서 쌍 데이터/1.모델/2. AI학습모델파일/영상" --task fnf
+python scripts/train_stage2.py --kps runs/kps/kps_trim.npz --manifest runs/kps/manifest_full.csv \
+    --model gru --feat posvel --out runs/mine --save-model runs/mine/models && cp runs/mine/models/gru.pt models/gru.pt
 ```
 
-## 6. 문제가 생기면
-
-### `numpy.dtype size changed`
-
-numpy 가 2.x 로 올라간 것이다.
+## 6. 새 데이터로 키포인트 추출 (데이터 확장할 때만)
 
 ```bash
-cd ~/Documents/fall-detection && uv pip install --python venv_aihub/bin/python "numpy==1.26.4"
+python scripts/extract_keypoints.py --manifest manifest.csv --root <영상루트> --out runs/kps_new --device mps
+python scripts/pack_keypoints.py --kps runs/kps_new --out runs/kps_new.npz
 ```
 
-### `module 'mediapipe' has no attribute 'solutions'`
+manifest 형식은 `runs/kps/manifest_full.csv` 와 같다 (`clip,label,start,end,subject,cam,dataset`).
+OmniFall zip 에서 manifest 를 만드는 것은 `scripts/build_manifest.py`, 데이터셋 하나씩 처리하는 것은 `scripts/expand_one.sh`.
 
-mediapipe 가 1.x 다. legacy API 가 제거되었으므로 내린다.
+## 7. 문제가 생기면
 
-```bash
-cd ~/Documents/fall-detection && uv pip install --python venv_aihub/bin/python "mediapipe==0.10.14" && uv pip install --python venv_aihub/bin/python "numpy==1.26.4"
-```
+| 증상 | 원인 · 해결 |
+|---|---|
+| `영상을 찾을 수 없다` | `data/aihub_sample/` 이 없거나 이름이 다르다. `ls data/aihub_sample/01.원천데이터/영상` |
+| 창이 안 뜬다 (Linux 서버) | `--no-display --save-video out.mp4` 로 저장해서 본다 |
+| `numpy.dtype size changed` | numpy 가 2.x 로 올라갔다. `pip install "numpy==1.26.4"` |
+| weasyprint import 오류 | pango 미설치. 위 0절. 또는 `--pdf` 빼고 HTML 만 만들어 브라우저에서 ⌘P → PDF |
+| CPU 에서 너무 느리다 | `--resize 640` 으로 입력을 줄인다. 판정 정확도는 거의 같다 |
+| MPS 에서 이상한 오류 | `--device cpu` 로 확인해 본다 |
 
-### 경고 메시지가 너무 많다
-
-MediaPipe 의 정상 출력이다. 무시해도 된다. 걸러내려면:
-
-```bash
-cd ~/Documents/fall-detection && ./venv_aihub/bin/python scripts/aihub_infer.py --data "/Users/mymoon/Downloads/Sample 2/01.원천데이터/영상" --models "/Users/mymoon/Downloads/낙상사고 위험동작 영상-센서 쌍 데이터/1.모델/2. AI학습모델파일/영상" --task fnf 2>&1 | grep -v "W0000\|I0000\|absl\|XNNPACK\|feedback"
-```
-
-### 영상을 못 찾는다
-
-`--data` 경로에 공백이 있으면 **따옴표로 감싸야 한다.**
-`Sample 2`, `낙상사고 위험동작...` 모두 공백이 있다.
-
-## 7. 시각 보고서 만들기
-
-추론 결과를 영상 썸네일과 함께 HTML 로 정리한다. 어떤 장면에서 왜 틀렸는지
-눈으로 확인할 수 있다.
-
-```bash
-cd ~/Documents/fall-detection && ./venv_aihub/bin/python scripts/make_report.py --data "/Users/mymoon/Downloads/Sample 2/01.원천데이터/영상" --task fnf
-```
-
-```bash
-cd ~/Documents/fall-detection && ./venv_aihub/bin/python scripts/make_report.py --data "/Users/mymoon/Downloads/Sample 2/01.원천데이터/영상" --task fd
-```
-
-저장 위치: `runs/report/fnf_report.html`, `runs/report/fd_report.html`
-
-브라우저로 열기:
-
-```bash
-open ~/Documents/fall-detection/runs/report/fnf_report.html
-```
-
-### 보고서에 담기는 것
-
-- 정확도 · Recall · Precision · FPR · 놓친 낙상 수
-- Confusion matrix (대각선 초록, 오분류 빨강)
-- **카메라별 정확도** — 어느 각도가 취약한지
-- **영상별 카드** — 시간순 프레임 5장 + 실제/예측 라벨 + 클래스별 확률
-  - 오답은 빨간 테두리로 구분된다
-  - 같은 장면이 카메라별로 묶여 있어 판정이 갈리는 지점을 바로 볼 수 있다
-
-| 옵션 | 기본값 | 설명 |
-|---|---|---|
-| `--frames` | 5 | 영상당 추출할 프레임 수 |
-| `--width` | 300 | 썸네일 가로 픽셀 |
-| `--out` | `runs/report` | 저장 위치 |
-
-이미지는 base64 로 HTML 에 내장되므로 파일 하나만 옮기면 어디서든 열린다
-(FNF 약 2MB, FD 약 1.5MB).
-
-### PDF 로 뽑기
-
-`--pdf` 를 붙이면 HTML 과 함께 PDF 도 만든다.
-
-```bash
-cd ~/Documents/fall-detection && ./venv_aihub/bin/python scripts/make_report.py --data "/Users/mymoon/Downloads/Sample 2/01.원천데이터/영상" --task fnf --pdf
-```
-
-저장 위치: `runs/report/fnf_report.pdf` (A4, 약 1.5MB, 12페이지)
-
-처음 한 번만 변환 라이브러리를 설치한다.
-
-```bash
-uv pip install --python venv_aihub/bin/python weasyprint
-```
-
-**weasyprint 를 쓰는 이유.** Chrome headless(`--print-to-pdf`)도 가능하지만,
-base64 이미지가 160장 들어간 2MB HTML 에서 렌더링이 5분을 넘겨도 끝나지 않았다.
-weasyprint 는 같은 작업을 23초에 끝낸다. 스크립트는 weasyprint 를 우선 쓰고,
-없으면 Chrome 으로 넘어간다.
-
-인쇄용 스타일이 따로 들어 있어 PDF 에서는:
-
-- 항상 라이트 테마로 고정된다 (다크 모드 화면이어도 인쇄물은 흰 배경)
-- 카드가 페이지 경계에서 잘리지 않는다
-- 가로 스크롤되던 프레임 5장이 한 줄에 균등 배치된다
-
-### 수동으로 PDF 만들기
-
-`--pdf` 가 실패하면 브라우저에서 직접 뽑아도 된다.
-
-```bash
-open ~/Documents/fall-detection/runs/report/fnf_report.html
-```
-
-⌘P → 대상을 **"PDF로 저장"** → 저장. 인쇄 스타일이 HTML 에 포함되어 있어
-결과물은 동일하다.
+AI Hub 공식 베이스라인(RandomForest) 재현 절차는 [baseline_run.md](baseline_run.md), 옛 상세 가이드는 [archive/how_to_run_aihub_baseline.md](archive/how_to_run_aihub_baseline.md).
