@@ -22,10 +22,14 @@ echo "    avi $(wc -l < /tmp/_all_$NAME.txt | tr -d ' ')개 → 해제 $(wc -l <
 
 echo "[*] 해제"
 mkdir -p "$UNZ"
-unzip -qq -o "$ZIP" -d "$UNZ" -x '*.avi'                      # CSV·annotation 등 작은 파일 먼저
-xargs -a /tmp/_short_$NAME.txt -n 200 unzip -qq -o "$ZIP" -d "$UNZ" 2>/dev/null || true
+unzip -qq -o "$ZIP" -d "$UNZ" "$NAME/*.csv" "$NAME/*.txt" "$NAME/*.py" 2>/dev/null || true   # 상위 라벨·메모만 (OCCU 는 depth 원본 .bin 수십만 개가 들어 있다)
+xargs -n 200 unzip -qq -o "$ZIP" -d "$UNZ" < /tmp/_short_$NAME.txt 2>/dev/null || true   # BSD xargs: -a 없음, stdin 으로
+N_AVI=$(find "$UNZ" -name '*.avi' | wc -l | tr -d ' ')
+echo "    $N_AVI개 · $(du -sh "$UNZ" | cut -f1) · 여유 $(df -h / | tail -1 | awk '{print $4}')"
+# 해제가 기대치의 90% 미만이면 zip 을 지우지 않는다 — 한 번 지우면 9GB 를 다시 받아야 한다
+EXPECT=$(wc -l < /tmp/_short_$NAME.txt | tr -d ' ')
+if [ "$N_AVI" -lt $(( EXPECT * 9 / 10 )) ]; then echo "[!] 해제 부족 ($N_AVI/$EXPECT) — zip 보존, 중단"; exit 1; fi
 rm -f "$ZIP"
-echo "    $(find "$UNZ" -name '*.avi' | wc -l | tr -d ' ')개 · $(du -sh "$UNZ" | cut -f1) · 여유 $(df -h / | tail -1 | awk '{print $4}')"
 
 echo "[*] manifest"
 $PY scripts/build_manifest.py --staged "$UNZ" --out data/omnifall/manifest_$NAME.csv

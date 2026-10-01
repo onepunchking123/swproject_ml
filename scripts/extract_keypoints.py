@@ -73,6 +73,9 @@ def main() -> int:
     ap.add_argument("--conf", type=float, default=0.25)
     ap.add_argument("--limit", type=int, help="처리할 클립 수 (빠른 확인용)")
     ap.add_argument("--device", default="0")
+    ap.add_argument("--trim-to-dur", action="store_true",
+                    help="앞 (end-start)×fps 프레임만 읽는다. OCCU 처럼 절단기가 -ss/-to 를 잘못 써서 "
+                         "클립이 [start, start+end] 로 길게 잘린 배포판용 (edf 도 같은 증상)")
     args = ap.parse_args()
 
     try:
@@ -105,8 +108,13 @@ def main() -> int:
         cap = cv2.VideoCapture(str(clip))
         w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 640
         h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 480
+        limit = None
+        if args.trim_to_dur:
+            dur = float(r["end"]) - float(r["start"])
+            fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+            limit = max(2, int(round(dur * fps)))
         frames = []
-        while True:
+        while limit is None or len(frames) < limit:
             ok, frame = cap.read()
             if not ok:
                 break
