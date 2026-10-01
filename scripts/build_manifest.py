@@ -19,7 +19,7 @@ import argparse, csv, collections, re
 from pathlib import Path
 
 TAIL = re.compile(r"_(?P<label>\d+)_(?P<start>[\d.]+)_(?P<end>[\d.]+)_"
-                  r"(?P<subject>-?\d+)_(?P<cam>-?\d+)_(?P<dataset>[A-Za-z][A-Za-z0-9]*)\.avi$")
+                  r"(?P<subject>-?\d+)_(?P<cam>-?\d+)_(?P<dataset>[A-Za-z][A-Za-z0-9_]*)\.avi$")
 
 LABEL2ID = {"walk":0, "fall":1, "fallen":2, "sit_down":3, "sitting":4, "lie_down":5,
             "lying":6, "stand_up":7, "standing":8, "other":9, "kneel_down":10,
@@ -36,6 +36,10 @@ def staged_rows(root: Path) -> list[dict]:
         if d["dataset"] == "OOPS":       # Zenodo 배포판에 영상이 없다 (12KB 껍데기)
             continue
         key = (d["dataset"], d["subject"], d["cam"], d["start"], d["end"], d["label"])
+        # 같은 구간이 짧은/긴 두 이름으로 들어 있는 중복만 걸러낸다 (CRC 동일 → 크기 동일).
+        # UP_Fall 처럼 Activity/Trial 이 다른데 시간 구간만 같은 클립은 크기가 달라 둘 다 남는다.
+        if key in seen and seen[key].stat().st_size != p.stat().st_size:
+            key = key + (p.stem,)
         if key not in seen or len(p.name) < len(seen[key].name):
             seen[key] = p
     out = []
