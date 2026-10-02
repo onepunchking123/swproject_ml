@@ -59,10 +59,13 @@ def syn_rows(root: Path) -> list[dict]:
         if lab is None:
             print(f"[!] 미지의 클래스 무시: {cls_dir.name}")
             continue
-        for v in sorted(cls_dir.glob("*.mp4")):
+        for i, v in enumerate(sorted(cls_dir.glob("*.mp4"))):
+            # 전체 클립 = 하나의 행동. 논문 기준 5초 클립이라 end=5.0 으로 둬야 로더가 fps 를
+            # 역산할 수 있다 (16fps — 다른 셋과 다르다). 피험자 개념이 없으므로 10개 가상 그룹에
+            # 순환 배정해 k-fold 에서 합성 전체가 한 fold 로 몰리지 않게 한다.
             out.append(dict(clip=str(v.relative_to(root)), label=lab,
-                            start=0.0, end=0.0,       # 전체 클립 = 하나의 행동
-                            subject=-1, cam=-1, dataset="synthetic"))
+                            start=0.0, end=5.0,
+                            subject=900 + i % 10, cam=-1, dataset="synthetic"))
     return out
 
 
